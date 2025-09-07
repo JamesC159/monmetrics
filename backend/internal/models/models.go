@@ -138,8 +138,8 @@ type LoginRequest struct {
 type RegisterRequest struct {
 	Email     string `json:"email" validate:"required,email"`
 	Password  string `json:"password" validate:"required,min=8"`
-	FirstName string `json:"first_name" validate:"required,min=2"`
-	LastName  string `json:"last_name" validate:"required,min=2"`
+	FirstName string `json:"firstName" validate:"required,min=2"`  // ← Changed to camelCase
+	LastName  string `json:"lastName" validate:"required,min=2"`   // ← Changed to camelCase
 }
 
 // AuthResponse represents authentication response

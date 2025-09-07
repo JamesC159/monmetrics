@@ -64,6 +64,10 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Debug logging (remove in production)
+	fmt.Printf("DEBUG - Received registration request: Email=%s, FirstName='%s', LastName='%s'\n",
+		req.Email, req.FirstName, req.LastName)
+
 	// Validate input
 	if err := h.validateRegisterRequest(&req); err != nil {
 		h.sendError(w, "Validation failed", http.StatusBadRequest, map[string]interface{}{
@@ -544,10 +548,10 @@ func (h *Handlers) validateRegisterRequest(req *models.RegisterRequest) error {
 	if len(req.Password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters")
 	}
-	if len(req.FirstName) < 2 {
+	if len(strings.TrimSpace(req.FirstName)) < 2 {  // ← Added TrimSpace for safety
 		return fmt.Errorf("first name must be at least 2 characters")
 	}
-	if len(req.LastName) < 2 {
+	if len(strings.TrimSpace(req.LastName)) < 2 {   // ← Added TrimSpace for safety
 		return fmt.Errorf("last name must be at least 2 characters")
 	}
 	return nil
