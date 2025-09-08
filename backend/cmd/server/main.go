@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -32,28 +33,28 @@ func main() {
 	// Setup router with middleware
 	mux := http.NewServeMux()
 
-	// Health check endpoint
+	// Health check endpoint (no middleware needed)
 	mux.HandleFunc("GET /health", h.Health)
 
-	// API routes
+	// Public API routes
 	apiMux := http.NewServeMux()
 	apiMux.HandleFunc("GET /cards/search", h.SearchCards)
 	apiMux.HandleFunc("GET /cards/{id}", h.GetCard)
 	apiMux.HandleFunc("GET /cards/{id}/prices", h.GetCardPrices)
 
-	// Auth routes
+	// Auth routes (public)
 	apiMux.HandleFunc("POST /auth/register", h.Register)
 	apiMux.HandleFunc("POST /auth/login", h.Login)
 	apiMux.HandleFunc("POST /auth/logout", h.Logout)
 
-	// Protected routes
+	// Protected routes (require authentication)
 	protectedMux := http.NewServeMux()
 	protectedMux.HandleFunc("GET /user/dashboard", h.GetDashboard)
 	protectedMux.HandleFunc("POST /user/charts", h.SaveChart)
 	protectedMux.HandleFunc("GET /user/charts", h.GetSavedCharts)
 	protectedMux.HandleFunc("DELETE /user/charts/{id}", h.DeleteChart)
 
-	// Apply middleware stack
+	// Apply middleware stack to public API routes
 	api := middleware.Chain(
 		middleware.CORS(config.CORSOrigins),
 		middleware.SecurityHeaders(),
@@ -61,6 +62,7 @@ func main() {
 		middleware.RequestLogger(),
 	)(apiMux)
 
+	// Apply middleware stack to protected routes (includes auth)
 	protectedAPI := middleware.Chain(
 		middleware.CORS(config.CORSOrigins),
 		middleware.SecurityHeaders(),
@@ -73,12 +75,7 @@ func main() {
 	mux.Handle("/api/", http.StripPrefix("/api", api))
 	mux.Handle("/api/protected/", http.StripPrefix("/api/protected", protectedAPI))
 
-	// Static file serving for production
-	if config.Environment == "production" {
-		mux.Handle("/", http.FileServer(http.Dir("./static/")))
-	}
-
-	// Create server
+	// Create HTTP server
 	server := &http.Server{
 		Addr:         ":" + config.Port,
 		Handler:      mux,
@@ -87,27 +84,54 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Start server in goroutine
+	// Start server in a goroutine
 	go func() {
-		log.Printf("Server starting on port %s", config.Port)
+		log.Printf("🚀 MonMetrics server starting on port %s", config.Port)
+		log.Printf("📊 Environment: %s", config.Environment)
+		log.Printf("🗄️  Database: %s", config.DBName)
+		log.Printf("🌐 CORS Origins: %v", config.CORSOrigins)
+		log.Printf("⚡ Rate Limit: %d requests per %v", config.RateLimitRequests, config.RateLimitWindow)
+
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal("Server failed to start:", err)
+			log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown
+	// Print available endpoints
+	fmt.Println("\n📡 Available Endpoints:")
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Printf("🏥 Health Check:     GET  http://localhost:%s/health\n", config.Port)
+	fmt.Println("\n🔓 Public API:")
+	fmt.Printf("🔍 Search Cards:     GET  http://localhost:%s/api/cards/search\n", config.Port)
+	fmt.Printf("📋 Get Card:         GET  http://localhost:%s/api/cards/{id}\n", config.Port)
+	fmt.Printf("📈 Card Prices:      GET  http://localhost:%s/api/cards/{id}/prices\n", config.Port)
+	fmt.Printf("👤 Register:         POST http://localhost:%s/api/auth/register\n", config.Port)
+	fmt.Printf("🔑 Login:            POST http://localhost:%s/api/auth/login\n", config.Port)
+	fmt.Printf("🚪 Logout:           POST http://localhost:%s/api/auth/logout\n", config.Port)
+	fmt.Println("\n🔒 Protected API (requires authentication):")
+	fmt.Printf("📊 Dashboard:        GET  http://localhost:%s/api/protected/user/dashboard\n", config.Port)
+	fmt.Printf("💾 Save Chart:       POST http://localhost:%s/api/protected/user/charts\n", config.Port)
+	fmt.Printf("📋 Get Charts:       GET  http://localhost:%s/api/protected/user/charts\n", config.Port)
+	fmt.Printf("🗑️  Delete Chart:     DEL  http://localhost:%s/api/protected/user/charts/{id}\n", config.Port)
+	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+	fmt.Printf("🎯 Frontend URL:     http://localhost:3000\n")
+	fmt.Println("\n✅ Server is ready to accept connections!")
+
+	// Wait for interrupt signal to gracefully shutdown the server
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("Shutting down server...")
 
-	// Graceful shutdown with timeout
+	log.Println("🛑 Shutting down server...")
+
+	// Create a deadline for shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Attempt graceful shutdown
 	if err := server.Shutdown(ctx); err != nil {
-		log.Fatal("Server forced to shutdown:", err)
+		log.Printf("❌ Server forced to shutdown: %v", err)
+	} else {
+		log.Println("✅ Server gracefully stopped")
 	}
-
-	log.Println("Server exited")
 }

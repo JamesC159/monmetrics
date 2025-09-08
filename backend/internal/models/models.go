@@ -79,14 +79,29 @@ type ChartIndicator struct {
 
 // MarketData represents aggregated market data for a card
 type MarketData struct {
-	CardID          primitive.ObjectID `bson:"card_id" json:"card_id"`
-	Date            time.Time          `bson:"date" json:"date"`
-	OpenPrice       float64            `bson:"open_price" json:"open_price"`
-	ClosePrice      float64            `bson:"close_price" json:"close_price"`
-	HighPrice       float64            `bson:"high_price" json:"high_price"`
-	LowPrice        float64            `bson:"low_price" json:"low_price"`
-	Volume          int                `bson:"volume" json:"volume"`
-	WeightedAvgPrice float64           `bson:"weighted_avg_price" json:"weighted_avg_price"`
+	CardID           primitive.ObjectID `bson:"card_id" json:"card_id"`
+	Date             time.Time          `bson:"date" json:"date"`
+	OpenPrice        float64            `bson:"open_price" json:"open_price"`
+	ClosePrice       float64            `bson:"close_price" json:"close_price"`
+	HighPrice        float64            `bson:"high_price" json:"high_price"`
+	LowPrice         float64            `bson:"low_price" json:"low_price"`
+	Volume           int                `bson:"volume" json:"volume"`
+	WeightedAvgPrice float64            `bson:"weighted_avg_price" json:"weighted_avg_price"`
+}
+
+// Listing represents a current marketplace listing
+type Listing struct {
+	ID        primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	CardID    primitive.ObjectID `bson:"card_id" json:"card_id"`
+	Title     string             `bson:"title" json:"title"`
+	Price     float64            `bson:"price" json:"price"`
+	Quantity  int                `bson:"quantity" json:"quantity"`
+	Condition string             `bson:"condition" json:"condition"`
+	Seller    string             `bson:"seller" json:"seller"`
+	Source    string             `bson:"source" json:"source"` // "ebay", "tcgplayer"
+	ImageURL  string             `bson:"image_url,omitempty" json:"image_url,omitempty"`
+	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
+	UpdatedAt time.Time          `bson:"updated_at" json:"updated_at"`
 }
 
 // SearchResult represents search results for cards
@@ -100,9 +115,9 @@ type SearchResult struct {
 
 // PriceHistory represents historical price data with indicators
 type PriceHistory struct {
-	Prices     []PricePoint              `json:"prices"`
-	MarketData []MarketData              `json:"market_data"`
-	Indicators map[string][]IndicatorPoint `json:"indicators,omitempty"`
+	Prices     []PricePoint                   `json:"prices"`
+	MarketData []MarketData                   `json:"market_data"`
+	Indicators map[string][]IndicatorPoint    `json:"indicators,omitempty"`
 }
 
 // IndicatorPoint represents a calculated indicator value
@@ -124,22 +139,22 @@ type UserStats struct {
 	ChartsCreated    int `json:"charts_created"`
 	IndicatorsUsed   int `json:"indicators_used"`
 	MaxIndicators    int `json:"max_indicators"`
-	DaysActive       int `json:"days_active"`
-	LastActiveDate   time.Time `json:"last_active_date"`
 }
 
-// LoginRequest represents login request payload
-type LoginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
-}
+// Request/Response Types
 
-// RegisterRequest represents registration request payload
+// RegisterRequest represents a user registration request
 type RegisterRequest struct {
-	Email     string `json:"email" validate:"required,email"`
-	Password  string `json:"password" validate:"required,min=8"`
-	FirstName string `json:"firstName" validate:"required,min=2"`  // ← Changed to camelCase
-	LastName  string `json:"lastName" validate:"required,min=2"`   // ← Changed to camelCase
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=8"`
+	FirstName string `json:"first_name" binding:"required"`
+	LastName  string `json:"last_name" binding:"required"`
+}
+
+// LoginRequest represents a user login request
+type LoginRequest struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
 }
 
 // AuthResponse represents authentication response
@@ -148,8 +163,25 @@ type AuthResponse struct {
 	User  User   `json:"user"`
 }
 
-// ErrorResponse represents error response
+// SearchParams represents search query parameters
+type SearchParams struct {
+	Query    string `json:"q,omitempty"`
+	Game     string `json:"game,omitempty"`
+	Category string `json:"category,omitempty"`
+	Page     int    `json:"page,omitempty"`
+	Limit    int    `json:"limit,omitempty"`
+}
+
+// ErrorResponse represents an API error response
 type ErrorResponse struct {
 	Error   string                 `json:"error"`
+	Success bool                   `json:"success"`
 	Details map[string]interface{} `json:"details,omitempty"`
+}
+
+// HealthResponse represents a health check response
+type HealthResponse struct {
+	Status    string    `json:"status"`
+	Timestamp time.Time `json:"timestamp"`
+	Version   string    `json:"version"`
 }

@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -56,6 +55,237 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// SearchCards searches for cards based on query parameters
+func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query().Get("q")
+	game := r.URL.Query().Get("game")
+	category := r.URL.Query().Get("category")
+	pageStr := r.URL.Query().Get("page")
+	limitStr := r.URL.Query().Get("limit")
+
+	// Parse pagination parameters
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	limit := 20
+	if limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+			limit = l
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	collection := h.db.Collection("cards")
+
+	// Build search filter
+	filter := bson.M{}
+
+	// Text search if query provided
+	if query != "" {
+		// Use MongoDB text search index
+		filter["$text"] = bson.M{"$search": query}
+	}
+
+	// Game filter
+	if game != "" {
+		filter["game"] = bson.M{"$regex": primitive.Regex{Pattern: game, Options: "i"}}
+	}
+
+	// Category filter
+	if category != "" {
+		filter["category"] = category
+	}
+
+	// Count total results
+	total, err := collection.CountDocuments(ctx, filter)
+	if err != nil {
+		http.Error(w, "Error counting documents", http.StatusInternalServerError)
+		return
+	}
+
+	// Calculate pagination
+	skip := (page - 1) * limit
+	totalPages := int((total + int64(limit) - 1) / int64(limit))
+
+	// Build find options
+	findOptions := options.Find()
+	findOptions.SetSkip(int64(skip))
+	findOptions.SetLimit(int64(limit))
+
+	// Sort by text score if searching, otherwise by updated_at
+	if query != "" {
+		findOptions.SetSort(bson.M{"score": bson.M{"$meta": "textScore"}})
+	} else {
+		findOptions.SetSort(bson.M{"updated_at": -1})
+	}
+
+	// Execute search
+	cursor, err := collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		http.Error(w, "Error searching cards", http.StatusInternalServerError)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var cards []models.Card
+	if err = cursor.All(ctx, &cards); err != nil {
+		http.Error(w, "Error decoding results", http.StatusInternalServerError)
+		return
+	}
+
+	// Build response
+	response := models.SearchResult{
+		Cards:      cards,
+		Total:      int(total),
+		Page:       page,
+		PerPage:    limit,
+		TotalPages: totalPages,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// GetCard retrieves a specific card by ID
+func (h *Handlers) GetCard(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		http.Error(w, "Card ID required", http.StatusBadRequest)
+		return
+	}
+
+	objectID, err := primitive.ObjectIDFromHex(idStr)
+	if err != nil {
+		http.Error(w, "Invalid card ID", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	collection := h.db.Collection("cards")
+
+	var card models.Card
+	err = collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&card)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Card not found", http.StatusNotFound)
+			return
+		}
+		http.Error(w, "Error retrieving card", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(card)
+}
+
+// GetCardPrices retrieves price history for a specific card
+func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		http.Error(w, "Card ID required", http.StatusBadRequest)
+		return
+	}
+
+	objectID, err := primitive.ObjectIDFromHex(idStr)
+	if err != nil {
+		http.Error(w, "Invalid card ID", http.StatusBadRequest)
+		return
+	}
+
+	// Parse time range
+	timeRange := r.URL.Query().Get("range")
+	if timeRange == "" {
+		timeRange = "30d"
+	}
+
+	// Calculate start date based on range
+	var startDate time.Time
+	now := time.Now()
+
+	switch timeRange {
+	case "1d":
+		startDate = now.AddDate(0, 0, -1)
+	case "7d":
+		startDate = now.AddDate(0, 0, -7)
+	case "30d":
+		startDate = now.AddDate(0, 0, -30)
+	case "90d":
+		startDate = now.AddDate(0, 0, -90)
+	case "1y":
+		startDate = now.AddDate(-1, 0, 0)
+	case "5y":
+		startDate = now.AddDate(-5, 0, 0)
+	default:
+		startDate = now.AddDate(0, 0, -30) // Default to 30 days
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	// Get price history
+	pricesCollection := h.db.Collection("prices")
+
+	filter := bson.M{
+		"card_id": objectID,
+		"timestamp": bson.M{
+			"$gte": startDate,
+			"$lte": now,
+		},
+	}
+
+	// Sort by timestamp
+	findOptions := options.Find().SetSort(bson.M{"timestamp": 1})
+
+	cursor, err := pricesCollection.Find(ctx, filter, findOptions)
+	if err != nil {
+		http.Error(w, "Error retrieving price history", http.StatusInternalServerError)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	var prices []models.PricePoint
+	if err = cursor.All(ctx, &prices); err != nil {
+		http.Error(w, "Error decoding price history", http.StatusInternalServerError)
+		return
+	}
+
+	// Get current listings
+	listingsCollection := h.db.Collection("listings")
+	listingsCursor, err := listingsCollection.Find(ctx, bson.M{"card_id": objectID})
+	if err != nil {
+		// Don't fail if listings aren't found, just return empty
+		fmt.Printf("Warning: Could not retrieve listings: %v\n", err)
+	}
+
+	var listings []interface{}
+	if listingsCursor != nil {
+		defer listingsCursor.Close(ctx)
+		if err = listingsCursor.All(ctx, &listings); err != nil {
+			fmt.Printf("Warning: Could not decode listings: %v\n", err)
+			listings = []interface{}{} // Empty listings
+		}
+	}
+
+	// Build response
+	response := map[string]interface{}{
+		"prices":   prices,
+		"listings": listings,
+		"range":    timeRange,
+		"total":    len(prices),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
 // Register new user
 func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
@@ -63,10 +293,6 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-
-	// Debug logging (remove in production)
-	fmt.Printf("DEBUG - Received registration request: Email=%s, FirstName='%s', LastName='%s'\n",
-		req.Email, req.FirstName, req.LastName)
 
 	// Validate input
 	if err := h.validateRegisterRequest(&req); err != nil {
@@ -112,20 +338,19 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 	user.ID = result.InsertedID.(primitive.ObjectID)
 
 	// Generate JWT token
-	token, err := h.generateJWT(&user)
+	token, err := h.generateJWT(user)
 	if err != nil {
 		h.sendError(w, "Failed to generate token", http.StatusInternalServerError, nil)
 		return
 	}
 
-	// Return response
+	// Return success response
 	response := models.AuthResponse{
 		Token: token,
 		User:  user,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(response)
 }
 
@@ -155,21 +380,30 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if user is active
+	if !user.IsActive {
+		h.sendError(w, "Account is disabled", http.StatusUnauthorized, nil)
+		return
+	}
+
 	// Update last login
 	now := time.Now().UTC()
-	collection.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{
-		"$set": bson.M{"last_login_at": now},
-	})
 	user.LastLoginAt = &now
+	collection.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{
+		"$set": bson.M{
+			"last_login_at": now,
+			"updated_at":    now,
+		},
+	})
 
 	// Generate JWT token
-	token, err := h.generateJWT(&user)
+	token, err := h.generateJWT(user)
 	if err != nil {
 		h.sendError(w, "Failed to generate token", http.StatusInternalServerError, nil)
 		return
 	}
 
-	// Return response
+	// Return success response
 	response := models.AuthResponse{
 		Token: token,
 		User:  user,
@@ -179,318 +413,143 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// Logout user (simple implementation)
+// Logout user
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
-	// In a more complex implementation, you might invalidate the token
-	// For now, we'll just return success as the client will remove the token
+	// For JWT-based auth, logout is typically handled client-side
+	// We could implement a token blacklist here if needed
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"message": "Logged out successfully",
-	})
+	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
 }
 
-// Search cards
-func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
-	game := r.URL.Query().Get("game")
-	category := r.URL.Query().Get("category")
-	pageStr := r.URL.Query().Get("page")
-	limitStr := r.URL.Query().Get("limit")
-
-	// Parse pagination
-	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
-	}
-
-	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Build search filter
-	filter := bson.M{}
-
-	if query != "" {
-		filter["$text"] = bson.M{"$search": query}
-	}
-
-	if game != "" {
-		filter["game"] = game
-	}
-
-	if category != "" {
-		filter["category"] = category
-	}
-
-	collection := h.db.Collection("cards")
-
-	// Get total count
-	total, err := collection.CountDocuments(ctx, filter)
-	if err != nil {
-		h.sendError(w, "Search failed", http.StatusInternalServerError, nil)
-		return
-	}
-
-	// Find cards with pagination
-	opts := options.Find()
-	opts.SetSkip(int64((page - 1) * limit))
-	opts.SetLimit(int64(limit))
-	opts.SetSort(bson.D{{"current_price", -1}}) // Sort by price descending
-
-	cursor, err := collection.Find(ctx, filter, opts)
-	if err != nil {
-		h.sendError(w, "Search failed", http.StatusInternalServerError, nil)
-		return
-	}
-	defer cursor.Close(ctx)
-
-	var cards []models.Card
-	if err := cursor.All(ctx, &cards); err != nil {
-		h.sendError(w, "Failed to decode results", http.StatusInternalServerError, nil)
-		return
-	}
-
-	// Calculate total pages
-	totalPages := int((total + int64(limit) - 1) / int64(limit))
-
-	result := models.SearchResult{
-		Cards:      cards,
-		Total:      int(total),
-		Page:       page,
-		PerPage:    limit,
-		TotalPages: totalPages,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// Get single card
-func (h *Handlers) GetCard(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	if idStr == "" {
-		http.Error(w, "Card ID required", http.StatusBadRequest)
-		return
-	}
-
-	cardID, err := primitive.ObjectIDFromHex(idStr)
-	if err != nil {
-		http.Error(w, "Invalid card ID", http.StatusBadRequest)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	var card models.Card
-	collection := h.db.Collection("cards")
-	err = collection.FindOne(ctx, bson.M{"_id": cardID}).Decode(&card)
-	if err != nil {
-		if err == mongo.ErrNoDocuments {
-			http.Error(w, "Card not found", http.StatusNotFound)
-			return
-		}
-		h.sendError(w, "Failed to fetch card", http.StatusInternalServerError, nil)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(card)
-}
-
-// Get card prices
-func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
-	idStr := r.PathValue("id")
-	if idStr == "" {
-		http.Error(w, "Card ID required", http.StatusBadRequest)
-		return
-	}
-
-	cardID, err := primitive.ObjectIDFromHex(idStr)
-	if err != nil {
-		http.Error(w, "Invalid card ID", http.StatusBadRequest)
-		return
-	}
-
-	timeRange := r.URL.Query().Get("range")
-	if timeRange == "" {
-		timeRange = "30d"
-	}
-
-	// Calculate time filter
-	var startTime time.Time
-	switch timeRange {
-	case "1d":
-		startTime = time.Now().AddDate(0, 0, -1)
-	case "7d":
-		startTime = time.Now().AddDate(0, 0, -7)
-	case "30d":
-		startTime = time.Now().AddDate(0, 0, -30)
-	case "90d":
-		startTime = time.Now().AddDate(0, 0, -90)
-	case "1y":
-		startTime = time.Now().AddDate(-1, 0, 0)
-	case "5y":
-		startTime = time.Now().AddDate(-5, 0, 0)
-	default:
-		startTime = time.Now().AddDate(0, 0, -30)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Get price points
-	pricesCollection := h.db.Collection("price_points")
-	filter := bson.M{
-		"card_id":   cardID,
-		"timestamp": bson.M{"$gte": startTime},
-	}
-
-	cursor, err := pricesCollection.Find(ctx, filter, options.Find().SetSort(bson.D{{"timestamp", 1}}))
-	if err != nil {
-		h.sendError(w, "Failed to fetch prices", http.StatusInternalServerError, nil)
-		return
-	}
-	defer cursor.Close(ctx)
-
-	var prices []models.PricePoint
-	if err := cursor.All(ctx, &prices); err != nil {
-		h.sendError(w, "Failed to decode prices", http.StatusInternalServerError, nil)
-		return
-	}
-
-	// Get market data
-	marketDataCollection := h.db.Collection("market_data")
-	marketCursor, err := marketDataCollection.Find(ctx, bson.M{
-		"card_id": cardID,
-		"date":    bson.M{"$gte": startTime},
-	}, options.Find().SetSort(bson.D{{"date", 1}}))
-	if err != nil {
-		h.sendError(w, "Failed to fetch market data", http.StatusInternalServerError, nil)
-		return
-	}
-	defer marketCursor.Close(ctx)
-
-	var marketData []models.MarketData
-	if err := marketCursor.All(ctx, &marketData); err != nil {
-		h.sendError(w, "Failed to decode market data", http.StatusInternalServerError, nil)
-		return
-	}
-
-	result := models.PriceHistory{
-		Prices:     prices,
-		MarketData: marketData,
-		Indicators: make(map[string][]models.IndicatorPoint),
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(result)
-}
-
-// Get user dashboard
+// GetDashboard returns user dashboard data
 func (h *Handlers) GetDashboard(w http.ResponseWriter, r *http.Request) {
-	claims := r.Context().Value("claims").(*Claims)
-	userID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	// Get user from context (set by auth middleware)
+	claims, ok := r.Context().Value("claims").(*Claims)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Get saved charts
 	chartsCollection := h.db.Collection("saved_charts")
-	cursor, err := chartsCollection.Find(ctx, bson.M{"user_id": userID},
-		options.Find().SetSort(bson.D{{"created_at", -1}}).SetLimit(10))
+	cursor, err := chartsCollection.Find(ctx, bson.M{"user_id": userID})
 	if err != nil {
-		h.sendError(w, "Failed to fetch dashboard", http.StatusInternalServerError, nil)
+		http.Error(w, "Error retrieving charts", http.StatusInternalServerError)
 		return
 	}
 	defer cursor.Close(ctx)
 
 	var savedCharts []models.SavedChart
-	if err := cursor.All(ctx, &savedCharts); err != nil {
-		h.sendError(w, "Failed to decode charts", http.StatusInternalServerError, nil)
+	if err = cursor.All(ctx, &savedCharts); err != nil {
+		http.Error(w, "Error decoding charts", http.StatusInternalServerError)
 		return
+	}
+
+	// TODO: Implement recently viewed cards (would need to track user views)
+	recentlyViewed := []models.Card{}
+
+	// Calculate user stats
+	userStats := models.UserStats{
+		ChartsCreated:  len(savedCharts),
+		IndicatorsUsed: calculateIndicatorsUsed(savedCharts),
+		MaxIndicators:  getMaxIndicators(claims.UserType),
 	}
 
 	dashboard := models.Dashboard{
 		SavedCharts:    savedCharts,
-		RecentlyViewed: []models.Card{}, // TODO: Implement recently viewed
-		UserStats: models.UserStats{
-			ChartsCreated: len(savedCharts),
-			MaxIndicators: getMaxIndicators(claims.UserType),
-		},
+		RecentlyViewed: recentlyViewed,
+		UserStats:      userStats,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(dashboard)
 }
 
-// Save chart
+// SaveChart saves a new chart for the user
 func (h *Handlers) SaveChart(w http.ResponseWriter, r *http.Request) {
-	claims := r.Context().Value("claims").(*Claims)
-	userID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	claims, ok := r.Context().Value("claims").(*Claims)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
 
-	var chart models.SavedChart
-	if err := json.NewDecoder(r.Body).Decode(&chart); err != nil {
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
+
+	var req models.SavedChart
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	// Validate indicator limits
+	// Validate indicators count based on user type
 	maxIndicators := getMaxIndicators(claims.UserType)
-	if len(chart.Indicators) > maxIndicators {
-		h.sendError(w, fmt.Sprintf("Maximum %d indicators allowed", maxIndicators), http.StatusBadRequest, nil)
+	if len(req.Indicators) > maxIndicators {
+		h.sendError(w, fmt.Sprintf("Exceeded maximum indicators limit (%d)", maxIndicators), http.StatusBadRequest, nil)
 		return
 	}
 
-	chart.UserID = userID
-	chart.CreatedAt = time.Now().UTC()
-	chart.UpdatedAt = time.Now().UTC()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
+	// Set user ID and timestamps
+	req.UserID = userID
+	req.CreatedAt = time.Now().UTC()
+	req.UpdatedAt = time.Now().UTC()
+
 	collection := h.db.Collection("saved_charts")
-	result, err := collection.InsertOne(ctx, chart)
+	result, err := collection.InsertOne(ctx, req)
 	if err != nil {
-		h.sendError(w, "Failed to save chart", http.StatusInternalServerError, nil)
+		http.Error(w, "Error saving chart", http.StatusInternalServerError)
 		return
 	}
 
-	chart.ID = result.InsertedID.(primitive.ObjectID)
+	req.ID = result.InsertedID.(primitive.ObjectID)
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
-	json.NewEncoder(w).Encode(chart)
+	json.NewEncoder(w).Encode(req)
 }
 
-// Get saved charts
+// GetSavedCharts retrieves user's saved charts
 func (h *Handlers) GetSavedCharts(w http.ResponseWriter, r *http.Request) {
-	claims := r.Context().Value("claims").(*Claims)
-	userID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	claims, ok := r.Context().Value("claims").(*Claims)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	collection := h.db.Collection("saved_charts")
-	cursor, err := collection.Find(ctx, bson.M{"user_id": userID},
-		options.Find().SetSort(bson.D{{"created_at", -1}}))
+	cursor, err := collection.Find(ctx, bson.M{"user_id": userID})
 	if err != nil {
-		h.sendError(w, "Failed to fetch charts", http.StatusInternalServerError, nil)
+		http.Error(w, "Error retrieving charts", http.StatusInternalServerError)
 		return
 	}
 	defer cursor.Close(ctx)
 
 	var charts []models.SavedChart
-	if err := cursor.All(ctx, &charts); err != nil {
-		h.sendError(w, "Failed to decode charts", http.StatusInternalServerError, nil)
+	if err = cursor.All(ctx, &charts); err != nil {
+		http.Error(w, "Error decoding charts", http.StatusInternalServerError)
 		return
 	}
 
@@ -498,10 +557,19 @@ func (h *Handlers) GetSavedCharts(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(charts)
 }
 
-// Delete saved chart
+// DeleteChart deletes a user's saved chart
 func (h *Handlers) DeleteChart(w http.ResponseWriter, r *http.Request) {
-	claims := r.Context().Value("claims").(*Claims)
-	userID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	claims, ok := r.Context().Value("claims").(*Claims)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	userID, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		http.Error(w, "Invalid user ID", http.StatusBadRequest)
+		return
+	}
 
 	chartIDStr := r.PathValue("id")
 	chartID, err := primitive.ObjectIDFromHex(chartIDStr)
@@ -516,10 +584,10 @@ func (h *Handlers) DeleteChart(w http.ResponseWriter, r *http.Request) {
 	collection := h.db.Collection("saved_charts")
 	result, err := collection.DeleteOne(ctx, bson.M{
 		"_id":     chartID,
-		"user_id": userID,
+		"user_id": userID, // Ensure user can only delete their own charts
 	})
 	if err != nil {
-		h.sendError(w, "Failed to delete chart", http.StatusInternalServerError, nil)
+		http.Error(w, "Error deleting chart", http.StatusInternalServerError)
 		return
 	}
 
@@ -528,63 +596,55 @@ func (h *Handlers) DeleteChart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusNoContent)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"message": "Chart deleted successfully"})
 }
 
 // Helper functions
 
-type Claims struct {
-	UserID   string `json:"user_id"`
-	Email    string `json:"email"`
-	UserType string `json:"user_type"`
-	Exp      int64  `json:"exp"`
-}
-
 func (h *Handlers) validateRegisterRequest(req *models.RegisterRequest) error {
-	// Basic validation
-	if len(req.Email) == 0 || !strings.Contains(req.Email, "@") {
-		return fmt.Errorf("valid email required")
+	if req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" {
+		return fmt.Errorf("all fields are required")
 	}
 	if len(req.Password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters")
-	}
-	if len(strings.TrimSpace(req.FirstName)) < 2 {  // ← Added TrimSpace for safety
-		return fmt.Errorf("first name must be at least 2 characters")
-	}
-	if len(strings.TrimSpace(req.LastName)) < 2 {   // ← Added TrimSpace for safety
-		return fmt.Errorf("last name must be at least 2 characters")
 	}
 	return nil
 }
 
 func (h *Handlers) hashPassword(password string) string {
-	hash := sha256.Sum256([]byte(password + "salt")) // In production, use proper salt
-	return base64.StdEncoding.EncodeToString(hash[:])
+	// Simple hash for demo - use bcrypt in production
+	hasher := hmac.New(sha256.New, h.config.JWTSecret)
+	hasher.Write([]byte(password))
+	return base64.URLEncoding.EncodeToString(hasher.Sum(nil))
 }
 
 func (h *Handlers) verifyPassword(password, hash string) bool {
 	return h.hashPassword(password) == hash
 }
 
-func (h *Handlers) generateJWT(user *models.User) (string, error) {
-	// Create claims
-	claims := Claims{
-		UserID:   user.ID.Hex(),
-		Email:    user.Email,
-		UserType: user.UserType,
-		Exp:      time.Now().Add(24 * time.Hour).Unix(),
+func (h *Handlers) generateJWT(user models.User) (string, error) {
+	// Simple JWT implementation for demo
+	header := map[string]interface{}{
+		"alg": "HS256",
+		"typ": "JWT",
 	}
 
-	// Create header and payload
-	header := map[string]string{"alg": "HS256", "typ": "JWT"}
-	headerBytes, _ := json.Marshal(header)
-	claimsBytes, _ := json.Marshal(claims)
+	payload := map[string]interface{}{
+		"user_id":   user.ID.Hex(),
+		"email":     user.Email,
+		"user_type": user.UserType,
+		"exp":       time.Now().Add(24 * time.Hour).Unix(),
+	}
 
-	headerB64 := base64.RawURLEncoding.EncodeToString(headerBytes)
-	claimsB64 := base64.RawURLEncoding.EncodeToString(claimsBytes)
+	headerJSON, _ := json.Marshal(header)
+	payloadJSON, _ := json.Marshal(payload)
 
-	// Create signature
-	message := headerB64 + "." + claimsB64
+	headerB64 := base64.RawURLEncoding.EncodeToString(headerJSON)
+	payloadB64 := base64.RawURLEncoding.EncodeToString(payloadJSON)
+
+	message := headerB64 + "." + payloadB64
+
 	hasher := hmac.New(sha256.New, h.config.JWTSecret)
 	hasher.Write([]byte(message))
 	signature := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
@@ -592,21 +652,45 @@ func (h *Handlers) generateJWT(user *models.User) (string, error) {
 	return message + "." + signature, nil
 }
 
-func (h *Handlers) sendError(w http.ResponseWriter, message string, status int, details map[string]interface{}) {
+func (h *Handlers) sendError(w http.ResponseWriter, message string, statusCode int, data map[string]interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	w.WriteHeader(statusCode)
 
-	response := models.ErrorResponse{
-		Error:   message,
-		Details: details,
+	response := map[string]interface{}{
+		"error":   message,
+		"success": false,
+	}
+
+	if data != nil {
+		for k, v := range data {
+			response[k] = v
+		}
 	}
 
 	json.NewEncoder(w).Encode(response)
+}
+
+func calculateIndicatorsUsed(charts []models.SavedChart) int {
+	indicatorMap := make(map[string]bool)
+	for _, chart := range charts {
+		for _, indicator := range chart.Indicators {
+			indicatorMap[indicator.Type] = true
+		}
+	}
+	return len(indicatorMap)
 }
 
 func getMaxIndicators(userType string) int {
 	if userType == "paid" {
 		return 10
 	}
-	return 3
+	return 3 // free users
+}
+
+// JWT Claims structure for middleware
+type Claims struct {
+	UserID   string `json:"user_id"`
+	Email    string `json:"email"`
+	UserType string `json:"user_type"`
+	Exp      int64  `json:"exp"`
 }

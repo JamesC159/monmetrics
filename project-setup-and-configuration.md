@@ -1,410 +1,381 @@
-# .env.example
-VITE_API_BASE_URL=http://localhost:8080
-VITE_APP_TITLE=MonMetrics
-VITE_APP_DESCRIPTION=Professional Trading Card Analysis
+# MonMetrics - Trading Card Price Analysis Platform
 
-# .env.local (for development - create this file)
-VITE_API_BASE_URL=http://localhost:8080
-VITE_APP_TITLE=MonMetrics
-VITE_APP_DESCRIPTION=Professional Trading Card Analysis
+A powerful web application for tracking, analyzing, and predicting trading card prices with advanced technical indicators. Built with **Go** (backend) and **React 19** (frontend) for maximum performance and scalability.
 
-# backend/.env.example
-PORT=8080
-MONGODB_URI=mongodb://localhost:27017
-DB_NAME=monmetrics
-JWT_SECRET=your-super-secret-jwt-key-change-this
-CORS_ORIGINS=http://localhost:3000
-RATE_LIMIT_REQUESTS=100
-RATE_LIMIT_WINDOW=60s
-ENVIRONMENT=development
+## 🚀 Quick Start (5 minutes)
 
-# backend/.env (for development - create this file)
-PORT=8080
-MONGODB_URI=mongodb://localhost:27017
-DB_NAME=monmetrics
-JWT_SECRET=your-super-secret-jwt-key-change-this
-CORS_ORIGINS=http://localhost:3000
-RATE_LIMIT_REQUESTS=100
-RATE_LIMIT_WINDOW=60s
-ENVIRONMENT=development
+```bash
+# 1. Clone the repository
+git clone <your-repo-url>
+cd monmetrics
 
-# .gitignore
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+# 2. Complete setup with sample data
+make full-setup
 
-# Dependencies
-node_modules
-go.sum
+# 3. Start development servers
+make dev
+```
 
-# Build outputs
-dist
-dist-ssr
-build
-bin/
-*.local
-
-# Environment variables
-.env
-.env.local
-.env.production
-.env.development
-
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Testing
-coverage/
-.nyc_output
-
-# ESLint cache
-.eslintcache
-
-# OS generated files
-Thumbs.db
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-
-# MongoDB data
-data/
-
-# Docker volumes
-mongodb_data/
-
-# docker-compose.yml (optional - for development)
-version: '3.8'
-services:
-  mongodb:
-    image: mongo:7.0
-    container_name: monmetrics_mongo
-    restart: unless-stopped
-    ports:
-      - "27017:27017"
-    environment:
-      MONGO_INITDB_DATABASE: monmetrics
-    volumes:
-      - mongodb_data:/data/db
-
-volumes:
-  mongodb_data:
-
-# Makefile for easy development
-.PHONY: install dev build preview clean setup
-
-# Install dependencies
-install:
-	@echo "Installing backend dependencies..."
-	cd backend && go mod tidy
-	@echo "Installing frontend dependencies..."
-	cd frontend && npm install
-
-# Start development servers
-dev:
-	@echo "Starting MongoDB..."
-	docker-compose up -d mongodb
-	@echo "Starting development servers..."
-	@echo "Backend: http://localhost:8080"
-	@echo "Frontend: http://localhost:3000"
-	@(cd backend && go run cmd/server/main.go) & \
-	(cd frontend && npm run dev) & \
-	wait
-
-# Build for production
-build:
-	@echo "Building backend..."
-	cd backend && go build -o bin/server cmd/server/main.go
-	@echo "Building frontend..."
-	cd frontend && npm run build
-
-# Preview production build
-preview:
-	cd frontend && npm run preview
-
-# Clean build artifacts
-clean:
-	@echo "Cleaning build artifacts..."
-	cd backend && rm -rf bin/
-	cd frontend && rm -rf dist/
-	docker-compose down
-
-# Initial project setup
-setup: install
-	@echo "Setting up project..."
-	@if [ ! -f backend/.env ]; then \
-		cp backend/.env.example backend/.env; \
-		echo "Created backend/.env from example"; \
-	fi
-	@if [ ! -f frontend/.env.local ]; then \
-		cp frontend/.env.example frontend/.env.local; \
-		echo "Created frontend/.env.local from example"; \
-	fi
-	@echo "Starting MongoDB for initial setup..."
-	docker-compose up -d mongodb
-	@echo "Waiting for MongoDB to be ready..."
-	sleep 5
-	@echo "Setup complete! Run 'make dev' to start development servers."
-
-# Test backend
-test-backend:
-	cd backend && go test ./...
-
-# Test frontend
-test-frontend:
-	cd frontend && npm test
-
-# Lint frontend
-lint-frontend:
-	cd frontend && npm run lint
-
-# Type check frontend
-type-check:
-	cd frontend && npm run type-check
-
-# Production start
-start-prod: build
-	@echo "Starting production servers..."
-	cd frontend && npm run serve
-
-# Docker compose for development
-dev-docker:
-	docker-compose up --build
-
-# README.md
-# MonMetrics - Professional Trading Card Analysis
-
-MonMetrics is a powerful web application for tracking, analyzing, and predicting trading card prices with advanced technical indicators. Built with Go (backend) and React 19 (frontend) for maximum performance and scalability.
-
-## 🚀 Features
-
-- **Advanced Price Analytics**: Track price movements with 5 years of historical data
-- **Technical Indicators**: Apply professional trading indicators (Bollinger Bands, RSI, Moving Averages)
-- **Real-time Updates**: Get instant market updates and price alerts
-- **Secure & Reliable**: Enterprise-grade security with 99.9% uptime
-- **Multi-platform Support**: Pokemon, Magic the Gathering, Yu-Gi-Oh, and more
-- **Professional Charts**: Save and share your analysis with advanced charting tools
-
-## 🛠 Tech Stack
-
-### Backend
-- **Language**: Go 1.21+
-- **Database**: MongoDB 7.0
-- **Authentication**: JWT with HMAC-SHA256
-- **Security**: OWASP compliant with comprehensive middleware
-- **Performance**: Pure Go stdlib, no external frameworks
-
-### Frontend
-- **Framework**: React 19 with native SSR
-- **Build Tool**: Vite 5.0
-- **Styling**: Tailwind CSS
-- **Routing**: React Router v6
-- **Charts**: Recharts
-- **Icons**: Lucide React
+That's it! Visit **http://localhost:3000** to start using MonMetrics.
 
 ## 📋 Prerequisites
 
-- Go 1.21 or higher
-- Node.js 18 or higher
-- Docker and Docker Compose
-- MongoDB (via Docker)
+Before you begin, ensure you have the following installed:
 
-## 🚀 Quick Start
+- **Go 1.21+** - [Download](https://golang.org/dl/)
+- **Node.js 18+** - [Download](https://nodejs.org/)
+- **Docker & Docker Compose** - [Download](https://docker.com/get-started)
 
-### 1. Clone and Setup
+### Verify Installation
+
 ```bash
-git clone <repository-url>
-cd monmetrics
+go version      # Should show 1.21+
+node --version  # Should show 18+
+docker --version
+docker-compose --version
+```
+
+## 🛠 Project Structure
+
+```
+monmetrics/
+├── backend/                    # Go backend API
+│   ├── cmd/
+│   │   ├── server/            # Main server application
+│   │   └── seeder/            # Database seeder
+│   ├── internal/
+│   │   ├── handlers/          # HTTP request handlers
+│   │   ├── middleware/        # HTTP middleware
+│   │   ├── models/            # Data models
+│   │   ├── database/          # MongoDB connection
+│   │   └── services/          # Business logic
+│   ├── configs/               # Configuration management
+│   └── go.mod                 # Go dependencies
+├── frontend/                  # React 19 frontend
+│   ├── src/
+│   │   ├── components/        # Reusable components
+│   │   ├── pages/             # Page components
+│   │   ├── context/           # React contexts
+│   │   ├── hooks/             # Custom hooks
+│   │   ├── utils/             # Utilities & API client
+│   │   └── types/             # TypeScript definitions
+│   ├── public/                # Static assets
+│   ├── package.json           # Node dependencies
+│   └── vite.config.ts         # Vite configuration
+├── docker-compose.yml         # Development services
+├── Makefile                   # Development commands
+└── README.md                  # This file
+```
+
+## ⚙️ Detailed Setup
+
+### Step 1: Install Dependencies
+
+```bash
+make install
+```
+
+This installs:
+- Go backend dependencies via `go mod tidy`
+- Frontend dependencies via `npm install`
+
+### Step 2: Environment Configuration
+
+```bash
 make setup
 ```
 
-### 2. Start Development Servers
+This creates:
+- `backend/.env` - Backend configuration
+- `frontend/.env.local` - Frontend configuration
+- Starts MongoDB container
+
+### Step 3: Populate Database
+
+```bash
+make seed
+```
+
+This creates sample data:
+- **11 trading cards** across Pokemon, Magic, and Yu-Gi-Oh
+- **5 years of price history** for each card
+- **Sample marketplace listings**
+- **Technical indicators** and market data
+
+### Step 4: Start Development
+
 ```bash
 make dev
 ```
 
-This will:
-- Start MongoDB via Docker
-- Launch the Go backend on http://localhost:8080
-- Launch the React frontend on http://localhost:3000
+This starts:
+- **Backend server** on http://localhost:8080
+- **Frontend server** on http://localhost:3000
+- **MongoDB** via Docker
 
-### 3. Open Your Browser
-Navigate to http://localhost:3000 to see the landing page.
-
-## 📁 Project Structure
-
-```
-monmetrics/
-├── backend/                 # Go backend
-│   ├── cmd/server/         # Main application entry
-│   ├── internal/           # Private application code
-│   │   ├── handlers/       # HTTP handlers
-│   │   ├── middleware/     # HTTP middleware
-│   │   ├── models/         # Data models
-│   │   ├── database/       # Database connection
-│   │   └── services/       # Business logic
-│   ├── configs/            # Configuration
-│   └── scripts/            # Setup scripts
-├── frontend/               # React 19 frontend
-│   ├── src/
-│   │   ├── components/     # Reusable components
-│   │   ├── pages/          # Page components
-│   │   ├── context/        # React contexts
-│   │   ├── hooks/          # Custom hooks
-│   │   ├── utils/          # Utilities
-│   │   └── types/          # TypeScript types
-│   ├── public/             # Static assets
-│   └── server.js           # SSR server
-├── docker-compose.yml      # Development services
-├── Makefile               # Development commands
-└── README.md
-```
-
-## 🔧 Development Commands
+## 🎯 Available Commands
 
 | Command | Description |
 |---------|-------------|
-| `make setup` | Initial project setup |
+| `make help` | Show all available commands |
+| `make full-setup` | Complete setup (install + config + seed) |
 | `make dev` | Start development servers |
 | `make build` | Build for production |
-| `make clean` | Clean build artifacts |
 | `make test-backend` | Run backend tests |
 | `make test-frontend` | Run frontend tests |
+| `make clean` | Clean build artifacts |
+| `make reset` | Reset database and builds |
+| `make seed` | Populate database with sample data |
+| `make db-status` | Check database status |
 
-## 🏗 Building for Production
+## 🧪 Testing the Application
 
-### Backend
-```bash
-cd backend
-go build -o bin/server cmd/server/main.go
+### 1. Search Functionality
+
+Visit http://localhost:3000/search and try searching for:
+
+- **"Charizard"** - Should find Charizard VMAX
+- **"Black Lotus"** - Should find the iconic Magic card
+- **"Blue-Eyes"** - Should find Blue-Eyes White Dragon
+- **"Pokemon"** - Should filter by game
+- **"sealed"** - Should show sealed products
+
+### 2. Card Detail Pages
+
+Click on any search result to view:
+- **Price history charts** with 5 years of data
+- **Current market listings** from eBay and TCGPlayer
+- **All-time high/low prices** with dates
+- **Interactive time range selection** (1D, 7D, 30D, 90D, 1Y, 5Y)
+
+### 3. User Registration
+
+1. Click "Sign In" → "Sign Up"
+2. Create an account
+3. Access the dashboard with saved charts functionality
+
+## 🔧 Configuration Options
+
+### Backend Configuration (backend/.env)
+
+```env
+PORT=8080                                    # Server port
+MONGODB_URI=mongodb://localhost:27017        # Database connection
+DB_NAME=monmetrics                          # Database name
+JWT_SECRET=your-super-secret-jwt-key        # JWT signing key
+CORS_ORIGINS=http://localhost:3000          # Allowed origins
+RATE_LIMIT_REQUESTS=100                     # Rate limit
+RATE_LIMIT_WINDOW=60s                       # Rate limit window
+ENVIRONMENT=development                      # Environment
 ```
 
-### Frontend
-```bash
-cd frontend
-npm run build
-npm run serve
+### Frontend Configuration (frontend/.env.local)
+
+```env
+VITE_API_BASE_URL=http://localhost:8080     # Backend API URL
+VITE_APP_TITLE=MonMetrics                   # App title
+VITE_APP_DESCRIPTION=Professional Trading Card Analysis
 ```
 
-## 🚀 Deployment
+## 📊 Features Overview
 
-The application is designed to run on a single dedicated server:
+### 🔓 Public Features
+- **Advanced Search** - Find cards by name, game, set, rarity
+- **Price History** - 5 years of historical data with charts
+- **Market Listings** - Current eBay and TCGPlayer listings
+- **Technical Analysis** - Basic indicators for all users
 
-1. **Backend**: Compile to a single binary
-2. **Frontend**: Build static assets with SSR server
-3. **Database**: MongoDB (can be containerized)
+### 🔒 Premium Features (Registered Users)
+- **Dashboard** - Personal analytics and saved charts
+- **Advanced Indicators** - Up to 10 technical indicators (vs 3 for free)
+- **Price Alerts** - Get notified of price changes
+- **Chart Saving** - Save and share your analysis
+
+### 📈 Technical Indicators (Coming Soon)
+- **Bollinger Bands** - Volatility analysis
+- **RSI** - Relative Strength Index
+- **Moving Averages** - SMA, EMA analysis
+- **MACD** - Trend momentum
+- **Volume Analysis** - Market activity patterns
+
+## 🚀 Production Deployment
+
+### Build for Production
+
+```bash
+make build
+```
+
+This creates:
+- `backend/bin/server` - Compiled Go binary
+- `frontend/dist/` - Static assets with SSR
 
 ### Environment Variables
 
-#### Backend (.env)
-```bash
+Update production environment files:
+
+**Backend (.env):**
+```env
 PORT=8080
-MONGODB_URI=mongodb://localhost:27017
-DB_NAME=monmetrics
-JWT_SECRET=your-super-secret-jwt-key
-CORS_ORIGINS=http://localhost:3000
-RATE_LIMIT_REQUESTS=100
+MONGODB_URI=mongodb://your-production-mongodb:27017
+DB_NAME=monmetrics_prod
+JWT_SECRET=your-super-secure-production-jwt-key
+CORS_ORIGINS=https://your-domain.com
+RATE_LIMIT_REQUESTS=1000
 RATE_LIMIT_WINDOW=60s
 ENVIRONMENT=production
 ```
 
-#### Frontend (.env.local)
-```bash
-VITE_API_BASE_URL=http://localhost:8080
+**Frontend (.env.production):**
+```env
+VITE_API_BASE_URL=https://api.your-domain.com
 VITE_APP_TITLE=MonMetrics
 VITE_APP_DESCRIPTION=Professional Trading Card Analysis
 ```
 
+### Start Production Servers
+
+```bash
+make start-prod
+```
+
 ## 🔒 Security Features
 
-- **OWASP Compliance**: Implements OWASP Secure Coding Practices
-- **CSRF Protection**: Cross-site request forgery protection
-- **XSS Prevention**: Content Security Policy and input sanitization
-- **Rate Limiting**: Configurable rate limiting per IP
-- **JWT Authentication**: Secure token-based authentication
-- **Password Hashing**: Secure password storage
-- **HTTPS Ready**: TLS/SSL configuration support
+MonMetrics implements **OWASP Secure Coding Practices**:
 
-## 📊 Features in Detail
-
-### For Free Users
-- Up to 3 technical indicators
-- Basic price history
-- Limited search results
-- Community support
-
-### For Pro Users ($19/month)
-- Up to 10 technical indicators
-- 5 years price history
-- Unlimited searches
-- Advanced charting tools
-- Price alerts
-- Priority support
-- Data export capabilities
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests if applicable
-5. Submit a pull request
-
-## 📝 API Documentation
-
-The backend provides a REST API with the following endpoints:
-
-### Public Endpoints
-- `GET /health` - Health check
-- `POST /api/auth/register` - User registration
-- `POST /api/auth/login` - User login
-- `GET /api/cards/search` - Search cards
-- `GET /api/cards/{id}` - Get card details
-- `GET /api/cards/{id}/prices` - Get price history
-
-### Protected Endpoints (Require Authentication)
-- `GET /api/protected/user/dashboard` - User dashboard
-- `POST /api/protected/user/charts` - Save chart
-- `GET /api/protected/user/charts` - Get saved charts
-- `DELETE /api/protected/user/charts/{id}` - Delete chart
+- **CORS Protection** - Configurable allowed origins
+- **Rate Limiting** - Prevent abuse and DDoS
+- **JWT Authentication** - Secure token-based auth
+- **Input Validation** - Prevent injection attacks
+- **Security Headers** - CSP, HSTS, X-Frame-Options
+- **Password Hashing** - Secure password storage
+- **SQL Injection Prevention** - Parameterized queries
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **MongoDB Connection Failed**
-   ```bash
-   docker-compose up -d mongodb
-   ```
+**❌ MongoDB Connection Failed**
+```bash
+make reset
+make setup
+```
 
-2. **Frontend Build Fails**
-   ```bash
-   cd frontend && rm -rf node_modules && npm install
-   ```
+**❌ Port Already in Use**
+```bash
+make check-ports  # Check what's using ports
+# Kill processes using ports 3000, 8080, or 27017
+```
 
-3. **Backend Won't Start**
-   ```bash
-   cd backend && go mod tidy
-   ```
+**❌ Frontend Build Fails**
+```bash
+cd frontend
+rm -rf node_modules package-lock.json
+npm install
+```
 
-4. **Port Already in Use**
-   - Change ports in `.env` files
-   - Kill existing processes
+**❌ Backend Won't Start**
+```bash
+cd backend
+go mod tidy
+go clean -cache
+```
+
+**❌ Database Empty After Seeding**
+```bash
+make reset        # Reset everything
+make full-setup   # Complete setup again
+```
+
+### Getting Help
+
+Check system information:
+```bash
+make info        # Show versions and status
+make db-status   # Check database
+make logs        # Show container logs
+```
+
+## 🎯 API Endpoints
+
+### Public Endpoints
+```
+GET  /health                    # Health check
+POST /api/auth/register         # User registration
+POST /api/auth/login            # User login
+GET  /api/cards/search          # Search cards
+GET  /api/cards/{id}            # Get card details
+GET  /api/cards/{id}/prices     # Get price history
+```
+
+### Protected Endpoints (Require Authentication)
+```
+GET  /api/protected/user/dashboard        # User dashboard
+POST /api/protected/user/charts           # Save chart
+GET  /api/protected/user/charts           # Get saved charts
+DEL  /api/protected/user/charts/{id}      # Delete chart
+```
+
+### Example API Usage
+
+**Search Cards:**
+```bash
+curl "http://localhost:8080/api/cards/search?q=charizard&game=Pokemon&limit=10"
+```
+
+**Get Card Details:**
+```bash
+curl "http://localhost:8080/api/cards/CARD_ID"
+```
+
+**Get Price History:**
+```bash
+curl "http://localhost:8080/api/cards/CARD_ID/prices?range=30d"
+```
+
+## 🛣️ Roadmap
+
+### Phase 1 (Current)
+- ✅ Core search and price tracking
+- ✅ Basic technical indicators
+- ✅ User authentication
+- ✅ Dashboard functionality
+
+### Phase 2 (Next)
+- 🔲 Advanced technical indicators
+- 🔲 Price alerts and notifications
+- 🔲 Mobile responsive design
+- 🔲 Data export capabilities
+
+### Phase 3 (Future)
+- 🔲 Mobile applications (iOS/Android)
+- 🔲 Machine learning price predictions
+- 🔲 Social features and community
+- 🔲 API for third-party integrations
+
+## 💎 Tech Stack Details
+
+### Backend
+- **Language:** Go 1.21+ (pure stdlib, no frameworks)
+- **Database:** MongoDB 7.0 with text search indexes
+- **Authentication:** JWT with HMAC-SHA256
+- **Security:** OWASP compliant middleware stack
+- **Performance:** Single binary deployment
+
+### Frontend
+- **Framework:** React 19 with native SSR
+- **Build Tool:** Vite 5.0 for fast development
+- **Styling:** Tailwind CSS for modern design
+- **Routing:** React Router v6 with dynamic routes
+- **Charts:** Recharts for interactive visualizations
+- **State:** React Context + Custom hooks
+- **TypeScript:** Full type safety
+
+### Infrastructure
+- **Development:** Docker Compose for local setup
+- **Database:** MongoDB with replica set support
+- **Caching:** Built-in Go caching mechanisms
+- **Monitoring:** Health checks and logging
 
 ## 📄 License
 
@@ -412,13 +383,13 @@ This project is proprietary software. All rights reserved.
 
 ## 📧 Support
 
-For support, email contact@monmetrics.com or visit our support portal.
+For support and questions:
+- Create an issue in the repository
+- Check the troubleshooting section above
+- Review the API documentation
 
-## 🎯 Roadmap
+---
 
-- [ ] Mobile applications (iOS/Android)
-- [ ] Advanced portfolio tracking
-- [ ] Machine learning price predictions
-- [ ] Social features and community
-- [ ] API for third-party integrations
-- [ ] Advanced alerting system
+**Happy Trading! 🎯**
+
+Built with ❤️ using Go and React for the trading card community.
