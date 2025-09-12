@@ -60,7 +60,7 @@ export default function Dashboard() {
               <Star className="w-8 h-8 text-yellow-400 mr-3" />
               <div>
                 <h3 className="text-lg font-semibold text-white">Plan</h3>
-                <p className="text-gray-400 capitalize">{user?.userType || 'Free'}</p>
+                <p className="text-gray-400 capitalize">{user?.user_type || 'Free'}</p>
               </div>
             </div>
           </div>
