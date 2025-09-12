@@ -35,6 +35,8 @@ func New(db *mongo.Database, config *configs.Config) *Handlers {
 
 // Health check endpoint
 func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("🏥 Health check request from %s\n", r.RemoteAddr)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -44,6 +46,9 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status = "unhealthy"
 		w.WriteHeader(http.StatusServiceUnavailable)
+		fmt.Printf("❌ Database ping failed: %v\n", err)
+	} else {
+		fmt.Printf("✅ Database ping successful\n")
 	}
 
 	response := map[string]interface{}{
@@ -53,7 +58,59 @@ func (h *Handlers) Health(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(response); err != nil {
+		fmt.Printf("❌ Error encoding health response: %v\n", err)
+	} else {
+		fmt.Printf("✅ Health check response sent\n")
+	}
+}
+
+// buildSearchFilter creates a robust search filter without relying on text indexes
+func (h *Handlers) buildSearchFilter(query, game, category string) bson.M {
+	filter := bson.M{}
+
+	// Handle text search using regex patterns (more reliable)
+	if query != "" {
+		cleanQuery := strings.TrimSpace(query)
+		if cleanQuery != "" {
+			// Create an array of regex patterns for different search strategies
+			orConditions := []bson.M{
+				{"name": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
+				{"set": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
+				{"game": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
+			}
+
+			// Add search terms array match
+			lowerQuery := strings.ToLower(cleanQuery)
+			orConditions = append(orConditions, bson.M{"search_terms": bson.M{"$in": []string{lowerQuery}}})
+
+			// Split query into words for partial matching
+			words := strings.Fields(cleanQuery)
+			if len(words) > 1 {
+				for _, word := range words {
+					if len(word) > 2 { // Only search for words longer than 2 characters
+						orConditions = append(orConditions,
+							bson.M{"name": bson.M{"$regex": primitive.Regex{Pattern: word, Options: "i"}}},
+						)
+					}
+				}
+			}
+
+			filter["$or"] = orConditions
+		}
+	}
+
+	// Game filter
+	if game != "" {
+		filter["game"] = bson.M{"$regex": primitive.Regex{Pattern: game, Options: "i"}}
+	}
+
+	// Category filter
+	if category != "" {
+		filter["category"] = category
+	}
+
+	return filter
 }
 
 // SearchCards searches for cards based on query parameters
@@ -84,74 +141,42 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 
 	collection := h.db.Collection("cards")
 
-	// Build search filter with improved logic
-	filter := bson.M{}
+	// Build search filter using the robust method
+	filter := h.buildSearchFilter(query, game, category)
 
-	// Handle text search more carefully
-	if query != "" {
-		// Trim and clean the query
-		cleanQuery := strings.TrimSpace(query)
-		if cleanQuery != "" {
-			// Try text search first, but fall back to regex if text index isn't available
-			// Use $or with multiple search strategies for better results
-			filter["$or"] = []bson.M{
-				// Text search (if index exists)
-				{"$text": bson.M{"$search": cleanQuery}},
-				// Regex searches as fallback
-				{"name": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
-				{"set": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
-				{"search_terms": bson.M{"$in": []string{strings.ToLower(cleanQuery)}}},
-			}
-		}
-	}
-
-	// Game filter
-	if game != "" {
-		filter["game"] = bson.M{"$regex": primitive.Regex{Pattern: game, Options: "i"}}
-	}
-
-	// Category filter
-	if category != "" {
-		filter["category"] = category
-	}
-
-	// Count total results with error handling
+	// Count total results with improved error handling
 	total, err := collection.CountDocuments(ctx, filter)
 	if err != nil {
-		// If the error is related to text search index, try without text search
-		if strings.Contains(err.Error(), "text") && query != "" {
+		fmt.Printf("Error counting documents: %v\n", err)
+		// Instead of returning an error immediately, try a simpler filter
+
+		// If there's a complex query causing issues, try with just basic filters
+		fallbackFilter := bson.M{}
+		if game != "" {
+			fallbackFilter["game"] = bson.M{"$regex": primitive.Regex{Pattern: game, Options: "i"}}
+		}
+		if category != "" {
+			fallbackFilter["category"] = category
+		}
+
+		// If we still have a query but the complex search failed, try simple name search
+		if query != "" {
 			cleanQuery := strings.TrimSpace(query)
-			// Rebuild filter without text search
-			filter = bson.M{}
-
 			if cleanQuery != "" {
-				filter["$or"] = []bson.M{
-					{"name": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
-					{"set": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
-					{"search_terms": bson.M{"$in": []string{strings.ToLower(cleanQuery)}}},
-				}
+				fallbackFilter["name"] = bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}
 			}
+		}
 
-			if game != "" {
-				filter["game"] = bson.M{"$regex": primitive.Regex{Pattern: game, Options: "i"}}
-			}
-
-			if category != "" {
-				filter["category"] = category
-			}
-
-			// Try counting again
-			total, err = collection.CountDocuments(ctx, filter)
-			if err != nil {
-				fmt.Printf("Error counting documents (after fallback): %v\n", err)
-				http.Error(w, "Error counter documents after fallback", http.StatusInternalServerError)
-				return
-			}
-		} else {
-			fmt.Printf("Error counting documents: %v\n", err)
-			http.Error(w, "Error counting documents", http.StatusInternalServerError)
+		// Try the fallback count
+		total, err = collection.CountDocuments(ctx, fallbackFilter)
+		if err != nil {
+			fmt.Printf("Error counting documents (fallback): %v\n", err)
+			http.Error(w, "Error retrieving search results", http.StatusInternalServerError)
 			return
 		}
+
+		// Use the fallback filter for the actual search too
+		filter = fallbackFilter
 	}
 
 	// Calculate pagination
@@ -162,14 +187,7 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(skip))
 	findOptions.SetLimit(int64(limit))
-
-	// Sort by relevance if searching, otherwise by updated_at
-	if query != "" {
-		// Try to sort by text score, but fall back if text search isn't working
-		findOptions.SetSort(bson.M{"updated_at": -1}) // Fallback sort
-	} else {
-		findOptions.SetSort(bson.M{"updated_at": -1})
-	}
+	findOptions.SetSort(bson.M{"updated_at": -1})
 
 	// Execute search
 	cursor, err := collection.Find(ctx, filter, findOptions)
@@ -309,32 +327,57 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 	listingsCollection := h.db.Collection("listings")
 	listingsCursor, err := listingsCollection.Find(ctx, bson.M{"card_id": objectID})
 	if err != nil {
-		// Don't fail if listings aren't found, just return empty
+		// Log error but continue - listings are optional
 		fmt.Printf("Warning: Could not retrieve listings: %v\n", err)
 	}
 
-	var listings []interface{}
+	var listings []models.Listing
 	if listingsCursor != nil {
 		defer listingsCursor.Close(ctx)
 		if err = listingsCursor.All(ctx, &listings); err != nil {
 			fmt.Printf("Warning: Could not decode listings: %v\n", err)
-			listings = []interface{}{} // Empty listings
+			listings = []models.Listing{} // Ensure we have an empty slice
+		}
+	}
+
+	// Get market data
+	marketDataCollection := h.db.Collection("market_data")
+	marketCursor, err := marketDataCollection.Find(ctx, bson.M{
+		"card_id": objectID,
+		"date": bson.M{
+			"$gte": startDate,
+			"$lte": now,
+		},
+	})
+
+	var marketData []models.MarketData
+	if err != nil {
+		fmt.Printf("Warning: Could not retrieve market data: %v\n", err)
+		marketData = []models.MarketData{} // Ensure we have an empty slice
+	} else {
+		defer marketCursor.Close(ctx)
+		if err = marketCursor.All(ctx, &marketData); err != nil {
+			fmt.Printf("Warning: Could not decode market data: %v\n", err)
+			marketData = []models.MarketData{} // Ensure we have an empty slice
 		}
 	}
 
 	// Build response
 	response := map[string]interface{}{
-		"prices":   prices,
-		"listings": listings,
-		"range":    timeRange,
-		"total":    len(prices),
+		"prices":      prices,
+		"listings":    listings,
+		"market_data": marketData,
+		"card_id":     objectID.Hex(),
+		"time_range":  timeRange,
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 }
 
-// Register new user
+// Authentication handlers
+
+// Register handles user registration
 func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 	var req models.RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -342,11 +385,9 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate input
+	// Validate request
 	if err := h.validateRegisterRequest(&req); err != nil {
-		h.sendError(w, "Validation failed", http.StatusBadRequest, map[string]interface{}{
-			"validation_errors": err.Error(),
-		})
+		h.sendError(w, err.Error(), http.StatusBadRequest, nil)
 		return
 	}
 
@@ -362,13 +403,10 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Hash password
-	passwordHash := h.hashPassword(req.Password)
-
 	// Create new user
 	user := models.User{
 		Email:        req.Email,
-		PasswordHash: passwordHash,
+		PasswordHash: h.hashPassword(req.Password),
 		FirstName:    req.FirstName,
 		LastName:     req.LastName,
 		UserType:     "free",
@@ -379,7 +417,8 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 
 	result, err := collection.InsertOne(ctx, user)
 	if err != nil {
-		h.sendError(w, "Failed to create user", http.StatusInternalServerError, nil)
+		fmt.Printf("Error creating user: %v\n", err)
+		http.Error(w, "Error creating user", http.StatusInternalServerError)
 		return
 	}
 
@@ -388,11 +427,10 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 	// Generate JWT token
 	token, err := h.generateJWT(user)
 	if err != nil {
-		h.sendError(w, "Failed to generate token", http.StatusInternalServerError, nil)
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
 	}
 
-	// Return success response
 	response := models.AuthResponse{
 		Token: token,
 		User:  user,
@@ -402,7 +440,7 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// Login user
+// Login handles user authentication
 func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	var req models.LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -428,30 +466,20 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if user is active
-	if !user.IsActive {
-		h.sendError(w, "Account is disabled", http.StatusUnauthorized, nil)
-		return
-	}
-
 	// Update last login
-	now := time.Now().UTC()
-	user.LastLoginAt = &now
 	collection.UpdateOne(ctx, bson.M{"_id": user.ID}, bson.M{
 		"$set": bson.M{
-			"last_login_at": now,
-			"updated_at":    now,
+			"last_login_at": time.Now().UTC(),
 		},
 	})
 
 	// Generate JWT token
 	token, err := h.generateJWT(user)
 	if err != nil {
-		h.sendError(w, "Failed to generate token", http.StatusInternalServerError, nil)
+		http.Error(w, "Error generating token", http.StatusInternalServerError)
 		return
 	}
 
-	// Return success response
 	response := models.AuthResponse{
 		Token: token,
 		User:  user,
@@ -461,17 +489,22 @@ func (h *Handlers) Login(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
-// Logout user
+// Logout handles user logout
 func (h *Handlers) Logout(w http.ResponseWriter, r *http.Request) {
-	// For JWT-based auth, logout is typically handled client-side
-	// We could implement a token blacklist here if needed
+	// For JWT-based authentication, logout is typically handled client-side
+	// The token is removed from client storage
+	// In a production environment, you might want to implement a token blacklist
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"message": "Logged out successfully"})
+	json.NewEncoder(w).Encode(map[string]string{
+		"message": "Logged out successfully",
+		"success": "true",
+	})
 }
 
-// GetDashboard returns user dashboard data
+// Dashboard handlers
+
+// GetDashboard retrieves user dashboard data
 func (h *Handlers) GetDashboard(w http.ResponseWriter, r *http.Request) {
-	// Get user from context (set by auth middleware)
 	claims, ok := r.Context().Value("claims").(*Claims)
 	if !ok {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
