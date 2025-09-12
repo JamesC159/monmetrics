@@ -9,6 +9,7 @@ import (
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/jamesc159/monmetrics/configs"
 	"github.com/jamesc159/monmetrics/internal/database"
@@ -24,14 +25,17 @@ func main() {
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
-	defer database.Disconnect()
+
+	// Note: We don't call database.Disconnect() here since it's handled internally
+	// The connection will be closed when the program exits
 
 	fmt.Println("🌱 Starting database seeding...")
 
-	// Clear existing cards (optional - comment out to preserve existing data)
+	// Clear existing data (optional - comment out to preserve existing data)
 	ctx := context.Background()
 	cardsCollection := db.Collection("cards")
 	pricesCollection := db.Collection("prices")
+	listingsCollection := db.Collection("listings")
 
 	fmt.Println("🗑️  Clearing existing data...")
 	// Remove existing data
@@ -45,7 +49,12 @@ func main() {
 		log.Printf("Warning: Failed to clear prices collection: %v", err)
 	}
 
-	// Seed cards
+	_, err = listingsCollection.DeleteMany(ctx, bson.M{})
+	if err != nil {
+		log.Printf("Warning: Failed to clear listings collection: %v", err)
+	}
+
+	// Seed cards with comprehensive sample data
 	cards := []models.Card{
 		// Pokemon Cards
 		{
@@ -105,6 +114,25 @@ func main() {
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
 		},
+		{
+			Name:         "Arceus VSTAR",
+			Set:          "Brilliant Stars",
+			Game:         "Pokemon",
+			Category:     "card",
+			Rarity:       "VSTAR",
+			Number:       "123/172",
+			ImageURL:     "https://images.pokemontcg.io/swsh9/123_hires.png",
+			Description:  "The Alpha Pokemon with ultimate versatility",
+			CurrentPrice: 67.50,
+			AllTimeHigh:  150.00,
+			AllTimeLow:   35.00,
+			ATHDate:      time.Now().AddDate(0, -5, 0),
+			ATLDate:      time.Now().AddDate(0, -1, 0),
+			SearchTerms:  []string{"arceus", "vstar", "brilliant", "stars", "colorless", "alpha", "pokemon"},
+			Tags:         []string{"legendary", "versatile", "meta"},
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		},
 
 		// Magic The Gathering Cards
 		{
@@ -161,6 +189,25 @@ func main() {
 			ATLDate:      time.Now().AddDate(0, -6, 0),
 			SearchTerms:  []string{"lightning", "bolt", "alpha", "red", "instant", "damage", "magic"},
 			Tags:         []string{"classic", "red", "vintage"},
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		},
+		{
+			Name:         "Mox Ruby",
+			Set:          "Alpha",
+			Game:         "Magic The Gathering",
+			Category:     "card",
+			Rarity:       "Rare",
+			Number:       "",
+			ImageURL:     "https://gatherer.wizards.com/Handlers/Image.ashx?multiverseid=263&type=card",
+			Description:  "Part of the iconic Power Nine, provides red mana",
+			CurrentPrice: 8500.00,
+			AllTimeHigh:  12000.00,
+			AllTimeLow:   5500.00,
+			ATHDate:      time.Now().AddDate(-1, -2, 0),
+			ATLDate:      time.Now().AddDate(-2, -6, 0),
+			SearchTerms:  []string{"mox", "ruby", "alpha", "power", "nine", "red", "mana", "magic"},
+			Tags:         []string{"power-nine", "vintage", "mana", "red"},
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
 		},
@@ -263,6 +310,25 @@ func main() {
 			CreatedAt:    time.Now(),
 			UpdatedAt:    time.Now(),
 		},
+		{
+			Name:         "Yu-Gi-Oh LOB Booster Box",
+			Set:          "Legend of Blue Eyes White Dragon",
+			Game:         "Yu-Gi-Oh",
+			Category:     "sealed",
+			Rarity:       "",
+			Number:       "",
+			ImageURL:     "https://images.ygoprodeck.com/pics_artgame/55210709.jpg",
+			Description:  "First edition LOB booster box - 24 packs",
+			CurrentPrice: 15000.00,
+			AllTimeHigh:  25000.00,
+			AllTimeLow:   8500.00,
+			ATHDate:      time.Now().AddDate(-1, -4, 0),
+			ATLDate:      time.Now().AddDate(-2, -8, 0),
+			SearchTerms:  []string{"yugioh", "lob", "legend", "booster", "box", "sealed", "first", "edition"},
+			Tags:         []string{"sealed", "vintage", "first-edition", "investment"},
+			CreatedAt:    time.Now(),
+			UpdatedAt:    time.Now(),
+		},
 	}
 
 	// Insert cards
@@ -352,6 +418,7 @@ func main() {
 			_, err := pricesCollection.InsertMany(ctx, batch)
 			if err != nil {
 				log.Printf("Warning: Failed to insert price batch for card %s: %v", card.Name, err)
+				continue // Continue with next batch instead of failing completely
 			}
 
 			if totalBatches > 1 {
@@ -364,49 +431,55 @@ func main() {
 
 	// Create sample listings for cards
 	fmt.Println("🏪 Creating sample marketplace listings...")
-	listingsCollection := db.Collection("listings")
 
-	// Clear existing listings
-	_, err = listingsCollection.DeleteMany(ctx, bson.M{})
-	if err != nil {
-		log.Printf("Warning: Failed to clear listings collection: %v", err)
-	}
-
-	// Create listings for first 5 cards as examples
+	// Create listings for first 8 cards as examples
 	totalListings := 0
-	for i, cardID := range result.InsertedIDs[:5] {
+	for i, cardID := range result.InsertedIDs {
+		if i >= 8 { // Limit to first 8 cards
+			break
+		}
+
 		objectID := cardID.(primitive.ObjectID)
 		card := cards[i]
 
 		// Generate 3-8 random listings per card
 		numListings := rand.Intn(6) + 3
+		var listings []interface{}
+
 		for j := 0; j < numListings; j++ {
 			// Price variation around current price
 			priceVariation := (rand.Float64() - 0.5) * 0.4 // +/- 20%
 			listingPrice := card.CurrentPrice * (1 + priceVariation)
 
-			listing := bson.M{
-				"card_id":     objectID,
-				"title":       fmt.Sprintf("%s - %s", card.Name, getRandomCondition()),
-				"price":       listingPrice,
-				"quantity":    rand.Intn(3) + 1,
-				"condition":   getRandomCondition(),
-				"seller":      getRandomSeller(),
-				"source":      getRandomSource(),
-				"image_url":   card.ImageURL,
-				"created_at":  time.Now().AddDate(0, 0, -rand.Intn(30)),
-				"updated_at":  time.Now(),
+			listing := models.Listing{
+				CardID:    objectID,
+				Title:     fmt.Sprintf("%s - %s", card.Name, getRandomCondition()),
+				Price:     listingPrice,
+				Quantity:  rand.Intn(3) + 1,
+				Condition: getRandomCondition(),
+				Seller:    getRandomSeller(),
+				Source:    getRandomSource(),
+				ImageURL:  card.ImageURL,
+				CreatedAt: time.Now().AddDate(0, 0, -rand.Intn(30)),
+				UpdatedAt: time.Now(),
 			}
 
-			_, err := listingsCollection.InsertOne(ctx, listing)
-			if err != nil {
-				log.Printf("Warning: Failed to insert listing: %v", err)
-			}
+			listings = append(listings, listing)
 		}
 
-		fmt.Printf("   ✅ %s: %d listings created\n", card.Name, numListings)
-		totalListings += numListings
+		// Insert all listings for this card at once
+		_, err := listingsCollection.InsertMany(ctx, listings)
+		if err != nil {
+			log.Printf("Warning: Failed to insert listings for card %s: %v", card.Name, err)
+		} else {
+			fmt.Printf("   ✅ %s: %d listings created\n", card.Name, numListings)
+			totalListings += numListings
+		}
 	}
+
+	// Create text search indexes for better performance
+	fmt.Println("🔍 Creating database indexes for optimal performance...")
+	createSearchIndexes(ctx, db)
 
 	fmt.Println("\n🎉 Database seeding completed successfully!")
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -416,14 +489,69 @@ func main() {
 	fmt.Printf("   • Total price records: ~%d\n", len(cards)*5*365*2)
 	fmt.Printf("   • Sample listings: %d\n", totalListings)
 	fmt.Println("\n🎯 Sample cards you can search for:")
-	fmt.Println("   • Charizard")
+	fmt.Println("   • Charizard VMAX")
 	fmt.Println("   • Black Lotus")
 	fmt.Println("   • Blue-Eyes White Dragon")
-	fmt.Println("   • Pikachu")
-	fmt.Println("   • Pokemon Base Set")
-	fmt.Println("   • Magic Alpha")
+	fmt.Println("   • Pikachu VMAX")
+	fmt.Println("   • Pokemon Base Set Booster Box")
+	fmt.Println("   • Magic Alpha Starter Deck")
+	fmt.Println("   • Mox Ruby")
+	fmt.Println("   • Dark Magician")
 	fmt.Println("\n✨ Ready to start the development server!")
-	fmt.Println("   Run: make dev")
+	fmt.Println("   Backend: make dev (or cd backend && go run cmd/server/main.go)")
+	fmt.Println("   Frontend: cd frontend && npm run dev")
+	fmt.Println("   Health Check: http://localhost:8080/health")
+	fmt.Println("   Frontend: http://localhost:3000")
+}
+
+// createSearchIndexes creates MongoDB text search indexes for better search performance
+func createSearchIndexes(ctx context.Context, db *mongo.Database) {
+	cardsCollection := db.Collection("cards")
+
+	// Create a comprehensive text index for searching
+	_, err := cardsCollection.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: map[string]interface{}{
+			"name":         "text",
+			"set":          "text",
+			"game":         "text",
+			"search_terms": "text",
+			"tags":         "text",
+		},
+	})
+
+	if err != nil {
+		log.Printf("Warning: Failed to create text search index: %v", err)
+	} else {
+		fmt.Println("   ✅ Created text search index for cards")
+	}
+
+	// Create additional performance indexes
+	indexes := []mongo.IndexModel{
+		{Keys: map[string]interface{}{"game": 1, "category": 1}},
+		{Keys: map[string]interface{}{"current_price": -1}},
+		{Keys: map[string]interface{}{"updated_at": -1}},
+	}
+
+	_, err = cardsCollection.Indexes().CreateMany(ctx, indexes)
+	if err != nil {
+		log.Printf("Warning: Failed to create performance indexes: %v", err)
+	} else {
+		fmt.Println("   ✅ Created performance indexes for cards")
+	}
+
+	// Create price points indexes
+	pricesCollection := db.Collection("prices")
+	priceIndexes := []mongo.IndexModel{
+		{Keys: map[string]interface{}{"card_id": 1, "timestamp": -1}},
+		{Keys: map[string]interface{}{"card_id": 1, "source": 1, "timestamp": -1}},
+	}
+
+	_, err = pricesCollection.Indexes().CreateMany(ctx, priceIndexes)
+	if err != nil {
+		log.Printf("Warning: Failed to create price indexes: %v", err)
+	} else {
+		fmt.Println("   ✅ Created indexes for price history")
+	}
 }
 
 func getRandomCondition() string {

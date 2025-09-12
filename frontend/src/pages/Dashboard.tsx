@@ -19,7 +19,7 @@ export default function Dashboard() {
             </Link>
 
             <div className="flex items-center space-x-4">
-              <span className="text-gray-300">Welcome, {user?.firstName}</span>
+              <span className="text-gray-300">Welcome, {user?.first_name}</span>
               <button onClick={logout} className="button-secondary">
                 Sign Out
               </button>

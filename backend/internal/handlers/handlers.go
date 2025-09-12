@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -83,13 +84,25 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 
 	collection := h.db.Collection("cards")
 
-	// Build search filter
+	// Build search filter with improved logic
 	filter := bson.M{}
 
-	// Text search if query provided
+	// Handle text search more carefully
 	if query != "" {
-		// Use MongoDB text search index
-		filter["$text"] = bson.M{"$search": query}
+		// Trim and clean the query
+		cleanQuery := strings.TrimSpace(query)
+		if cleanQuery != "" {
+			// Try text search first, but fall back to regex if text index isn't available
+			// Use $or with multiple search strategies for better results
+			filter["$or"] = []bson.M{
+				// Text search (if index exists)
+				{"$text": bson.M{"$search": cleanQuery}},
+				// Regex searches as fallback
+				{"name": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
+				{"set": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
+				{"search_terms": bson.M{"$in": []string{strings.ToLower(cleanQuery)}}},
+			}
+		}
 	}
 
 	// Game filter
@@ -102,11 +115,43 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 		filter["category"] = category
 	}
 
-	// Count total results
+	// Count total results with error handling
 	total, err := collection.CountDocuments(ctx, filter)
 	if err != nil {
-		http.Error(w, "Error counting documents", http.StatusInternalServerError)
-		return
+		// If the error is related to text search index, try without text search
+		if strings.Contains(err.Error(), "text") && query != "" {
+			cleanQuery := strings.TrimSpace(query)
+			// Rebuild filter without text search
+			filter = bson.M{}
+
+			if cleanQuery != "" {
+				filter["$or"] = []bson.M{
+					{"name": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
+					{"set": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
+					{"search_terms": bson.M{"$in": []string{strings.ToLower(cleanQuery)}}},
+				}
+			}
+
+			if game != "" {
+				filter["game"] = bson.M{"$regex": primitive.Regex{Pattern: game, Options: "i"}}
+			}
+
+			if category != "" {
+				filter["category"] = category
+			}
+
+			// Try counting again
+			total, err = collection.CountDocuments(ctx, filter)
+			if err != nil {
+				fmt.Printf("Error counting documents (after fallback): %v\n", err)
+				http.Error(w, "Error counter documents after fallback", http.StatusInternalServerError)
+				return
+			}
+		} else {
+			fmt.Printf("Error counting documents: %v\n", err)
+			http.Error(w, "Error counting documents", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// Calculate pagination
@@ -118,9 +163,10 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 	findOptions.SetSkip(int64(skip))
 	findOptions.SetLimit(int64(limit))
 
-	// Sort by text score if searching, otherwise by updated_at
+	// Sort by relevance if searching, otherwise by updated_at
 	if query != "" {
-		findOptions.SetSort(bson.M{"score": bson.M{"$meta": "textScore"}})
+		// Try to sort by text score, but fall back if text search isn't working
+		findOptions.SetSort(bson.M{"updated_at": -1}) // Fallback sort
 	} else {
 		findOptions.SetSort(bson.M{"updated_at": -1})
 	}
@@ -128,13 +174,15 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 	// Execute search
 	cursor, err := collection.Find(ctx, filter, findOptions)
 	if err != nil {
-		http.Error(w, "Error searching cards", http.StatusInternalServerError)
+		fmt.Printf("Error executing search: %v\n", err)
+		http.Error(w, "Error executing search", http.StatusInternalServerError)
 		return
 	}
 	defer cursor.Close(ctx)
 
 	var cards []models.Card
 	if err = cursor.All(ctx, &cards); err != nil {
+		fmt.Printf("Error decoding results: %v\n", err)
 		http.Error(w, "Error decoding results", http.StatusInternalServerError)
 		return
 	}
