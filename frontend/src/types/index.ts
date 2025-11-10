@@ -31,6 +31,7 @@ export interface Card {
   atl_date: string
   search_terms: string[]
   tags?: string[]
+  popularity_rank?: number // Based on 6-month popularity metrics
 }
 
 export interface PricePoint {
@@ -163,11 +164,7 @@ export interface HealthResponse {
 
 // API Error class
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-    public response?: any
-  ) {
+  constructor(message: string, public status: number, public response?: any) {
     super(message)
     this.name = 'ApiError'
   }
@@ -185,16 +182,16 @@ export interface ChartDataPoint {
 
 // Available technical indicators
 export type IndicatorType =
-  | 'sma'          // Simple Moving Average
-  | 'ema'          // Exponential Moving Average
-  | 'bollinger'    // Bollinger Bands
-  | 'rsi'          // Relative Strength Index
-  | 'macd'         // MACD
-  | 'stochastic'   // Stochastic Oscillator
-  | 'williams_r'   // Williams %R
-  | 'cci'          // Commodity Channel Index
-  | 'atr'          // Average True Range
-  | 'volume_sma'   // Volume Simple Moving Average
+  | 'sma' // Simple Moving Average
+  | 'ema' // Exponential Moving Average
+  | 'bollinger' // Bollinger Bands
+  | 'rsi' // Relative Strength Index
+  | 'macd' // MACD
+  | 'stochastic' // Stochastic Oscillator
+  | 'williams_r' // Williams %R
+  | 'cci' // Commodity Channel Index
+  | 'atr' // Average True Range
+  | 'volume_sma' // Volume Simple Moving Average
 
 // Indicator configurations
 export interface IndicatorConfig {
@@ -227,7 +224,7 @@ export const TIME_RANGES: TimeRange[] = [
   { value: '30d', label: '30 Days', days: 30 },
   { value: '90d', label: '90 Days', days: 90 },
   { value: '1y', label: '1 Year', days: 365 },
-  { value: '5y', label: '5 Years', days: 1825 }
+  { value: '5y', label: '5 Years', days: 1825 },
 ]
 
 // Available games
@@ -238,10 +235,10 @@ export const GAMES = [
   'Dragon Ball Super',
   'One Piece',
   'Digimon',
-  'Flesh and Blood'
+  'Flesh and Blood',
 ] as const
 
-export type GameType = typeof GAMES[number]
+export type GameType = (typeof GAMES)[number]
 
 // Card conditions
 export const CONDITIONS = [
@@ -250,20 +247,15 @@ export const CONDITIONS = [
   'Lightly Played',
   'Moderately Played',
   'Heavily Played',
-  'Damaged'
+  'Damaged',
 ] as const
 
-export type ConditionType = typeof CONDITIONS[number]
+export type ConditionType = (typeof CONDITIONS)[number]
 
 // Marketplace sources
-export const SOURCES = [
-  'ebay',
-  'tcgplayer',
-  'cardmarket',
-  'tcgplayer_direct'
-] as const
+export const SOURCES = ['ebay', 'tcgplayer', 'cardmarket', 'tcgplayer_direct'] as const
 
-export type SourceType = typeof SOURCES[number]
+export type SourceType = (typeof SOURCES)[number]
 
 // Sort options for search
 export interface SortOption {
@@ -280,7 +272,7 @@ export const SORT_OPTIONS: SortOption[] = [
   { value: 'name_asc', label: 'Name: A to Z', field: 'name', direction: 'asc' },
   { value: 'name_desc', label: 'Name: Z to A', field: 'name', direction: 'desc' },
   { value: 'newest', label: 'Newest First', field: 'created_at', direction: 'desc' },
-  { value: 'oldest', label: 'Oldest First', field: 'created_at', direction: 'asc' }
+  { value: 'oldest', label: 'Oldest First', field: 'created_at', direction: 'asc' },
 ]
 
 // Filter options
@@ -305,7 +297,7 @@ export const PRICE_RANGES: PriceRange[] = [
   { label: '$100 - $250', min: 100, max: 250 },
   { label: '$250 - $500', min: 250, max: 500 },
   { label: '$500 - $1,000', min: 500, max: 1000 },
-  { label: '$1,000+', min: 1000 }
+  { label: '$1,000+', min: 1000 },
 ]
 
 // Toast notification types
@@ -360,7 +352,7 @@ export const STORAGE_KEYS = {
   AUTH_TOKEN: 'monmetrics_auth_token',
   USER_PREFERENCES: 'monmetrics_user_preferences',
   RECENT_SEARCHES: 'monmetrics_recent_searches',
-  CHART_SETTINGS: 'monmetrics_chart_settings'
+  CHART_SETTINGS: 'monmetrics_chart_settings',
 } as const
 
 // User preferences
@@ -375,4 +367,30 @@ export interface UserPreferences {
     newListings: boolean
     marketUpdates: boolean
   }
+}
+
+// Featured Content for Carousel
+export interface FeaturedContent {
+  id: string
+  type: 'product' | 'market_mover' | 'news' | 'pickup' | 'sponsored'
+  title: string
+  description?: string
+  image_url: string
+  card_id?: string
+  link?: string
+  priority: number // Higher = shown first
+  active: boolean
+  created_at: string
+  expires_at?: string
+  // Market mover specific
+  price_change?: number // Percentage
+  price_change_value?: number // Dollar amount
+}
+
+// Game-grouped cards for search page
+export interface GameCardGroup {
+  game: string
+  category: 'card' | 'sealed'
+  cards: Card[]
+  total_count: number
 }

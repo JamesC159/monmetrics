@@ -8,7 +8,7 @@ import type {
   AuthResponse,
   LoginRequest,
   RegisterRequest,
-  SearchParams
+  SearchParams,
 } from '@/types'
 
 // Safe environment variable access with fallback
@@ -52,10 +52,7 @@ class ApiClient {
     }
   }
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`
 
     // Create headers using Headers constructor for proper typing
@@ -104,7 +101,7 @@ class ApiClient {
         }
 
         const error: ApiError = new Error(
-          errorData.error || `HTTP ${response.status}: ${response.statusText}`
+          errorData.error || `HTTP ${response.status}: ${response.statusText}`,
         )
         error.status = response.status
         error.details = errorData.details
@@ -172,12 +169,27 @@ class ApiClient {
     return this.request<PriceHistory>(`/api/cards/${id}/prices?range=${range}`)
   }
 
+  // Featured content and organized search
+  async getFeaturedContent(): Promise<import('@/types').FeaturedContent[]> {
+    return this.request<import('@/types').FeaturedContent[]>('/api/featured-content')
+  }
+
+  async getCardsByGame(): Promise<import('@/types').GameCardGroup[]> {
+    return this.request<import('@/types').GameCardGroup[]>('/api/cards/by-game')
+  }
+
+  async getSealedByGame(): Promise<import('@/types').GameCardGroup[]> {
+    return this.request<import('@/types').GameCardGroup[]>('/api/sealed/by-game')
+  }
+
   // Protected methods (require authentication)
   async getDashboard(): Promise<Dashboard> {
     return this.request<Dashboard>('/api/protected/user/dashboard')
   }
 
-  async saveChart(chart: Omit<SavedChart, 'id' | 'userId' | 'createdAt' | 'updatedAt'>): Promise<SavedChart> {
+  async saveChart(
+    chart: Omit<SavedChart, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
+  ): Promise<SavedChart> {
     return this.request<SavedChart>('/api/protected/user/charts', {
       method: 'POST',
       body: JSON.stringify(chart),

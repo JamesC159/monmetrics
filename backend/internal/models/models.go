@@ -2,6 +2,7 @@ package models
 
 import (
 	"time"
+
 	"go.mongodb.org/mongo-driver/bson/primitive"
 )
 
@@ -21,17 +22,17 @@ type User struct {
 
 // Card represents a trading card or sealed product
 type Card struct {
-	ID           primitive.ObjectID `bson:"_id,omitempty" json:"id"`
-	Name         string             `bson:"name" json:"name"`
-	Set          string             `bson:"set" json:"set"`
-	Game         string             `bson:"game" json:"game"` // Pokemon, Yu-Gi-Oh, Magic, etc.
-	Category     string             `bson:"category" json:"category"` // "card" or "sealed"
-	Rarity       string             `bson:"rarity,omitempty" json:"rarity,omitempty"`
-	Number       string             `bson:"number,omitempty" json:"number,omitempty"`
-	ImageURL     string             `bson:"image_url" json:"image_url"`
-	Description  string             `bson:"description,omitempty" json:"description,omitempty"`
-	CreatedAt    time.Time          `bson:"created_at" json:"created_at"`
-	UpdatedAt    time.Time          `bson:"updated_at" json:"updated_at"`
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"`
+	Name        string             `bson:"name" json:"name"`
+	Set         string             `bson:"set" json:"set"`
+	Game        string             `bson:"game" json:"game"`         // Pokemon, Yu-Gi-Oh, Magic, etc.
+	Category    string             `bson:"category" json:"category"` // "card" or "sealed"
+	Rarity      string             `bson:"rarity,omitempty" json:"rarity,omitempty"`
+	Number      string             `bson:"number,omitempty" json:"number,omitempty"`
+	ImageURL    string             `bson:"image_url" json:"image_url"`
+	Description string             `bson:"description,omitempty" json:"description,omitempty"`
+	CreatedAt   time.Time          `bson:"created_at" json:"created_at"`
+	UpdatedAt   time.Time          `bson:"updated_at" json:"updated_at"`
 
 	// Current market data
 	CurrentPrice float64   `bson:"current_price" json:"current_price"`
@@ -41,8 +42,11 @@ type Card struct {
 	ATLDate      time.Time `bson:"atl_date" json:"atl_date"`
 
 	// Search and categorization
-	SearchTerms  []string `bson:"search_terms" json:"search_terms"`
-	Tags         []string `bson:"tags,omitempty" json:"tags,omitempty"`
+	SearchTerms []string `bson:"search_terms" json:"search_terms"`
+	Tags        []string `bson:"tags,omitempty" json:"tags,omitempty"`
+
+	// Popularity and ranking (based on 6-month metrics)
+	PopularityRank int `bson:"popularity_rank,omitempty" json:"popularity_rank,omitempty"`
 }
 
 // PricePoint represents a single price data point
@@ -115,9 +119,9 @@ type SearchResult struct {
 
 // PriceHistory represents historical price data with indicators
 type PriceHistory struct {
-	Prices     []PricePoint                   `json:"prices"`
-	MarketData []MarketData                   `json:"market_data"`
-	Indicators map[string][]IndicatorPoint    `json:"indicators,omitempty"`
+	Prices     []PricePoint                `json:"prices"`
+	MarketData []MarketData                `json:"market_data"`
+	Indicators map[string][]IndicatorPoint `json:"indicators,omitempty"`
 }
 
 // IndicatorPoint represents a calculated indicator value
@@ -136,9 +140,9 @@ type Dashboard struct {
 
 // UserStats represents user statistics
 type UserStats struct {
-	ChartsCreated    int `json:"charts_created"`
-	IndicatorsUsed   int `json:"indicators_used"`
-	MaxIndicators    int `json:"max_indicators"`
+	ChartsCreated  int `json:"charts_created"`
+	IndicatorsUsed int `json:"indicators_used"`
+	MaxIndicators  int `json:"max_indicators"`
 }
 
 // Request/Response Types
@@ -147,8 +151,8 @@ type UserStats struct {
 type RegisterRequest struct {
 	Email     string `json:"email" binding:"required,email"`
 	Password  string `json:"password" binding:"required,min=8"`
-	FirstName string `json:"first_name" binding:"required"`
-	LastName  string `json:"last_name" binding:"required"`
+	FirstName string `json:"firstName" binding:"required"`
+	LastName  string `json:"lastName" binding:"required"`
 }
 
 // LoginRequest represents a user login request
@@ -184,4 +188,30 @@ type HealthResponse struct {
 	Status    string    `json:"status"`
 	Timestamp time.Time `json:"timestamp"`
 	Version   string    `json:"version"`
+}
+
+// FeaturedContent represents carousel content types
+type FeaturedContent struct {
+	ID          primitive.ObjectID  `bson:"_id,omitempty" json:"id"`
+	Type        string              `bson:"type" json:"type"` // "product", "market_mover", "news", "pickup", "sponsored"
+	Title       string              `bson:"title" json:"title"`
+	Description string              `bson:"description,omitempty" json:"description,omitempty"`
+	ImageURL    string              `bson:"image_url" json:"image_url"`
+	CardID      *primitive.ObjectID `bson:"card_id,omitempty" json:"card_id,omitempty"`
+	Link        string              `bson:"link,omitempty" json:"link,omitempty"`
+	Priority    int                 `bson:"priority" json:"priority"` // Higher = shown first
+	Active      bool                `bson:"active" json:"active"`
+	CreatedAt   time.Time           `bson:"created_at" json:"created_at"`
+	ExpiresAt   *time.Time          `bson:"expires_at,omitempty" json:"expires_at,omitempty"`
+	// Market mover specific fields
+	PriceChange      float64 `bson:"price_change,omitempty" json:"price_change,omitempty"`             // Percentage
+	PriceChangeValue float64 `bson:"price_change_value,omitempty" json:"price_change_value,omitempty"` // Dollar amount
+}
+
+// GameCardGroup represents cards/sealed grouped by game
+type GameCardGroup struct {
+	Game       string `json:"game"`
+	Category   string `json:"category"` // "card" or "sealed"
+	Cards      []Card `json:"cards"`
+	TotalCount int    `json:"total_count"`
 }

@@ -1,6 +1,9 @@
 # MonMetrics Development Makefile
 # Provides easy commands for development workflow
 
+# Ensure we use Go 1.24.2 from /usr/local/go
+export PATH := /usr/local/go/bin:$(PATH)
+
 .PHONY: help install dev build preview clean setup seed test-backend test-frontend lint-frontend type-check start-prod dev-docker
 
 # Default target - show help
@@ -134,6 +137,8 @@ seed:
 	fi
 	@echo "📦 Updating Go dependencies..."
 	@cd backend && go mod tidy
+	@echo "🧹 Cleaning Go build cache..."
+	@cd backend && go clean -cache
 	@echo "🔨 Building seeder..."
 	@cd backend && go build -o bin/seeder cmd/seeder/main.go
 	@echo "🚀 Running database seeder..."

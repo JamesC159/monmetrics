@@ -42,6 +42,11 @@ func main() {
 	apiMux.HandleFunc("GET /cards/{id}", h.GetCard)
 	apiMux.HandleFunc("GET /cards/{id}/prices", h.GetCardPrices)
 
+	// Featured content and organized search
+	apiMux.HandleFunc("GET /featured-content", h.GetFeaturedContent)
+	apiMux.HandleFunc("GET /cards/by-game", h.GetCardsByGame)
+	apiMux.HandleFunc("GET /sealed/by-game", h.GetSealedByGame)
+
 	// Auth routes (public)
 	apiMux.HandleFunc("POST /auth/register", h.Register)
 	apiMux.HandleFunc("POST /auth/login", h.Login)
@@ -105,6 +110,9 @@ func main() {
 	fmt.Printf("🔍 Search Cards:     GET  http://localhost:%s/api/cards/search\n", config.Port)
 	fmt.Printf("📋 Get Card:         GET  http://localhost:%s/api/cards/{id}\n", config.Port)
 	fmt.Printf("📈 Card Prices:      GET  http://localhost:%s/api/cards/{id}/prices\n", config.Port)
+	fmt.Printf("🎪 Featured Content: GET  http://localhost:%s/api/featured-content\n", config.Port)
+	fmt.Printf("🎮 Cards by Game:    GET  http://localhost:%s/api/cards/by-game\n", config.Port)
+	fmt.Printf("📦 Sealed by Game:   GET  http://localhost:%s/api/sealed/by-game\n", config.Port)
 	fmt.Printf("👤 Register:         POST http://localhost:%s/api/auth/register\n", config.Port)
 	fmt.Printf("🔑 Login:            POST http://localhost:%s/api/auth/login\n", config.Port)
 	fmt.Printf("🚪 Logout:           POST http://localhost:%s/api/auth/logout\n", config.Port)

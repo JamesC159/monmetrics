@@ -8,14 +8,17 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/jamesc159/monmetrics/configs"
 	"github.com/jamesc159/monmetrics/internal/models"
@@ -198,7 +201,8 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 	}
 	defer cursor.Close(ctx)
 
-	var cards []models.Card
+	// Initialize as empty slice instead of nil to ensure JSON serializes as [] not null
+	cards := make([]models.Card, 0)
 	if err = cursor.All(ctx, &cards); err != nil {
 		fmt.Printf("Error decoding results: %v\n", err)
 		http.Error(w, "Error decoding results", http.StatusInternalServerError)
@@ -403,10 +407,18 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Hash password
+	passwordHash, err := h.hashPassword(req.Password)
+	if err != nil {
+		fmt.Printf("Error hashing password: %v\n", err)
+		http.Error(w, "Error processing registration", http.StatusInternalServerError)
+		return
+	}
+
 	// Create new user
 	user := models.User{
 		Email:        req.Email,
-		PasswordHash: h.hashPassword(req.Password),
+		PasswordHash: passwordHash,
 		FirstName:    req.FirstName,
 		LastName:     req.LastName,
 		UserType:     "free",
@@ -681,31 +693,351 @@ func (h *Handlers) DeleteChart(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"message": "Chart deleted successfully"})
 }
 
+// Featured content and organized search handlers
+
+// GetFeaturedContent retrieves active featured content for the carousel
+func (h *Handlers) GetFeaturedContent(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	collection := h.db.Collection("featured_content")
+
+	// Get active featured content, sorted by priority
+	filter := bson.M{
+		"active": true,
+		"$or": []bson.M{
+			{"expires_at": bson.M{"$exists": false}},
+			{"expires_at": bson.M{"$gt": time.Now()}},
+		},
+	}
+
+	// Use bson.D for ordered sort (priority first, then created_at)
+	findOptions := options.Find().SetSort(bson.D{{"priority", -1}, {"created_at", -1}})
+
+	cursor, err := collection.Find(ctx, filter, findOptions)
+	if err != nil {
+		fmt.Printf("Error retrieving featured content: %v\n", err)
+		// Return empty array instead of error if collection doesn't exist
+		featuredContent := make([]models.FeaturedContent, 0)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(featuredContent)
+		return
+	}
+	defer cursor.Close(ctx)
+
+	featuredContent := make([]models.FeaturedContent, 0)
+	if err = cursor.All(ctx, &featuredContent); err != nil {
+		fmt.Printf("Error decoding featured content: %v\n", err)
+		// Return empty array instead of error
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(featuredContent)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(featuredContent)
+}
+
+// GetCardsByGame retrieves cards organized by game with popularity sorting
+func (h *Handlers) GetCardsByGame(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	collection := h.db.Collection("cards")
+
+	// Get all unique games
+	games, err := collection.Distinct(ctx, "game", bson.M{"category": "card"})
+	if err != nil {
+		fmt.Printf("Error retrieving games: %v\n", err)
+		// Return empty array instead of error
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]models.GameCardGroup{})
+		return
+	}
+
+	fmt.Printf("Found %d unique games for cards\n", len(games))
+
+	// For each game, get top cards by popularity (limit to 12 for 2 rows of 6)
+	gameGroups := make([]models.GameCardGroup, 0)
+
+	for _, game := range games {
+		gameStr, ok := game.(string)
+		if !ok {
+			continue
+		}
+
+		// Get total count
+		totalCount, err := collection.CountDocuments(ctx, bson.M{
+			"game":     gameStr,
+			"category": "card",
+		})
+		if err != nil {
+			fmt.Printf("Error counting cards for game %s: %v\n", gameStr, err)
+			continue
+		}
+
+		// Get top 12 cards by popularity
+		findOptions := options.Find().
+			SetSort(bson.D{{"popularity_rank", 1}, {"current_price", -1}}).
+			SetLimit(12)
+
+		cursor, err := collection.Find(ctx, bson.M{
+			"game":     gameStr,
+			"category": "card",
+		}, findOptions)
+
+		if err != nil {
+			fmt.Printf("Error retrieving cards for game %s: %v\n", gameStr, err)
+			continue
+		}
+
+		var cards []models.Card
+		if err = cursor.All(ctx, &cards); err != nil {
+			cursor.Close(ctx)
+			fmt.Printf("Error decoding cards for game %s: %v\n", gameStr, err)
+			continue
+		}
+		cursor.Close(ctx)
+
+		gameGroups = append(gameGroups, models.GameCardGroup{
+			Game:       gameStr,
+			Category:   "card",
+			Cards:      cards,
+			TotalCount: int(totalCount),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(gameGroups)
+}
+
+// GetSealedByGame retrieves sealed products organized by game with popularity sorting
+func (h *Handlers) GetSealedByGame(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	collection := h.db.Collection("cards")
+
+	// Get all unique games that have sealed products
+	games, err := collection.Distinct(ctx, "game", bson.M{"category": "sealed"})
+	if err != nil {
+		fmt.Printf("Error retrieving games: %v\n", err)
+		// Return empty array instead of error
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]models.GameCardGroup{})
+		return
+	}
+
+	fmt.Printf("Found %d unique games for sealed\n", len(games))
+
+	// For each game, get top sealed products by popularity (limit to 12 for 2 rows of 6)
+	gameGroups := make([]models.GameCardGroup, 0)
+
+	for _, game := range games {
+		gameStr, ok := game.(string)
+		if !ok {
+			continue
+		}
+
+		// Get total count
+		totalCount, err := collection.CountDocuments(ctx, bson.M{
+			"game":     gameStr,
+			"category": "sealed",
+		})
+		if err != nil {
+			fmt.Printf("Error counting sealed for game %s: %v\n", gameStr, err)
+			continue
+		}
+
+		// Get top 12 sealed products by popularity
+		findOptions := options.Find().
+			SetSort(bson.D{{"popularity_rank", 1}, {"current_price", -1}}).
+			SetLimit(12)
+
+		cursor, err := collection.Find(ctx, bson.M{
+			"game":     gameStr,
+			"category": "sealed",
+		}, findOptions)
+
+		if err != nil {
+			fmt.Printf("Error retrieving sealed for game %s: %v\n", gameStr, err)
+			continue
+		}
+
+		var cards []models.Card
+		if err = cursor.All(ctx, &cards); err != nil {
+			cursor.Close(ctx)
+			fmt.Printf("Error decoding sealed for game %s: %v\n", gameStr, err)
+			continue
+		}
+		cursor.Close(ctx)
+
+		gameGroups = append(gameGroups, models.GameCardGroup{
+			Game:       gameStr,
+			Category:   "sealed",
+			Cards:      cards,
+			TotalCount: int(totalCount),
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(gameGroups)
+}
+
 // Helper functions
 
-func (h *Handlers) validateRegisterRequest(req *models.RegisterRequest) error {
-	if req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" {
-		return fmt.Errorf("all fields are required")
+// normalizeEmail converts email to lowercase and trims whitespace
+func normalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// sanitizeName removes dangerous characters and normalizes whitespace
+func sanitizeName(name string) string {
+	// Trim whitespace
+	name = strings.TrimSpace(name)
+
+	// Remove control characters and normalize spaces
+	var result strings.Builder
+	prevSpace := false
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			continue
+		}
+		if unicode.IsSpace(r) {
+			if !prevSpace {
+				result.WriteRune(' ')
+				prevSpace = true
+			}
+			continue
+		}
+		result.WriteRune(r)
+		prevSpace = false
 	}
-	if len(req.Password) < 8 {
+
+	return result.String()
+}
+
+// validateEmail validates email format using regex
+func validateEmail(email string) bool {
+	// RFC 5322 simplified email regex
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
+	return emailRegex.MatchString(email) && len(email) <= 254
+}
+
+// validatePassword checks password strength according to OWASP guidelines
+func validatePassword(password string) error {
+	if len(password) < 8 {
 		return fmt.Errorf("password must be at least 8 characters")
 	}
+
+	if len(password) > 128 {
+		return fmt.Errorf("password must not exceed 128 characters")
+	}
+
+	// Check for at least one uppercase, lowercase, digit, and special character
+	var (
+		hasUpper   = false
+		hasLower   = false
+		hasNumber  = false
+		hasSpecial = false
+	)
+
+	for _, char := range password {
+		switch {
+		case unicode.IsUpper(char):
+			hasUpper = true
+		case unicode.IsLower(char):
+			hasLower = true
+		case unicode.IsDigit(char):
+			hasNumber = true
+		case unicode.IsPunct(char) || unicode.IsSymbol(char):
+			hasSpecial = true
+		}
+	}
+
+	if !hasUpper || !hasLower || !hasNumber || !hasSpecial {
+		return fmt.Errorf("password must contain at least one uppercase letter, one lowercase letter, one number, and one special character")
+	}
+
 	return nil
 }
 
-func (h *Handlers) hashPassword(password string) string {
-	// Simple hash for demo - use bcrypt in production
-	hasher := hmac.New(sha256.New, h.config.JWTSecret)
-	hasher.Write([]byte(password))
-	return base64.URLEncoding.EncodeToString(hasher.Sum(nil))
+// validateName checks if name is valid
+func validateName(name string) error {
+	if len(name) < 2 {
+		return fmt.Errorf("name must be at least 2 characters")
+	}
+
+	if len(name) > 50 {
+		return fmt.Errorf("name must not exceed 50 characters")
+	}
+
+	// Check for at least one letter
+	hasLetter := false
+	for _, r := range name {
+		if unicode.IsLetter(r) {
+			hasLetter = true
+			break
+		}
+	}
+
+	if !hasLetter {
+		return fmt.Errorf("name must contain at least one letter")
+	}
+
+	return nil
+}
+
+func (h *Handlers) validateRegisterRequest(req *models.RegisterRequest) error {
+	// Normalize inputs
+	req.Email = normalizeEmail(req.Email)
+	req.FirstName = sanitizeName(req.FirstName)
+	req.LastName = sanitizeName(req.LastName)
+
+	// Validate all fields are present
+	if req.Email == "" || req.Password == "" || req.FirstName == "" || req.LastName == "" {
+		return fmt.Errorf("all fields are required")
+	}
+
+	// Validate email format
+	if !validateEmail(req.Email) {
+		return fmt.Errorf("invalid email format")
+	}
+
+	// Validate password strength
+	if err := validatePassword(req.Password); err != nil {
+		return err
+	}
+
+	// Validate names
+	if err := validateName(req.FirstName); err != nil {
+		return fmt.Errorf("invalid first name: %v", err)
+	}
+
+	if err := validateName(req.LastName); err != nil {
+		return fmt.Errorf("invalid last name: %v", err)
+	}
+
+	return nil
+}
+
+func (h *Handlers) hashPassword(password string) (string, error) {
+	// Use bcrypt with cost factor 12 (OWASP recommended minimum is 10)
+	// Cost 12 provides good balance between security and performance
+	hashedBytes, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	if err != nil {
+		return "", err
+	}
+	return string(hashedBytes), nil
 }
 
 func (h *Handlers) verifyPassword(password, hash string) bool {
-	return h.hashPassword(password) == hash
+	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
+	return err == nil
 }
 
 func (h *Handlers) generateJWT(user models.User) (string, error) {
-	// Simple JWT implementation for demo
+	// JWT implementation using HMAC-SHA256 (consistent with middleware)
 	header := map[string]interface{}{
 		"alg": "HS256",
 		"typ": "JWT",
@@ -726,6 +1058,7 @@ func (h *Handlers) generateJWT(user models.User) (string, error) {
 
 	message := headerB64 + "." + payloadB64
 
+	// Sign with HMAC-SHA256
 	hasher := hmac.New(sha256.New, h.config.JWTSecret)
 	hasher.Write([]byte(message))
 	signature := base64.RawURLEncoding.EncodeToString(hasher.Sum(nil))
