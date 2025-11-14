@@ -22,14 +22,14 @@ That's it! Visit **http://localhost:3000** to start using MonMetrics.
 
 Before you begin, ensure you have the following installed:
 
-- **Go 1.21+** - [Download](https://golang.org/dl/)
+- **Go 1.24.2+** - [Download](https://golang.org/dl/)
 - **Node.js 18+** - [Download](https://nodejs.org/)
 - **Docker & Docker Compose** - [Download](https://docker.com/get-started)
 
 ### Verify Installation
 
 ```bash
-go version      # Should show 1.21+
+go version      # Should show 1.24.2+
 node --version  # Should show 18+
 docker --version
 docker-compose --version
@@ -76,6 +76,7 @@ make install
 ```
 
 This installs:
+
 - Go backend dependencies via `go mod tidy`
 - Frontend dependencies via `npm install`
 
@@ -86,6 +87,7 @@ make setup
 ```
 
 This creates:
+
 - `backend/.env` - Backend configuration
 - `frontend/.env.local` - Frontend configuration
 - Starts MongoDB container
@@ -97,6 +99,7 @@ make seed
 ```
 
 This creates sample data:
+
 - **11 trading cards** across Pokemon, Magic, and Yu-Gi-Oh
 - **5 years of price history** for each card
 - **Sample marketplace listings**
@@ -109,24 +112,25 @@ make dev
 ```
 
 This starts:
+
 - **Backend server** on http://localhost:8080
 - **Frontend server** on http://localhost:3000
 - **MongoDB** via Docker
 
 ## 🎯 Available Commands
 
-| Command | Description |
-|---------|-------------|
-| `make help` | Show all available commands |
-| `make full-setup` | Complete setup (install + config + seed) |
-| `make dev` | Start development servers |
-| `make build` | Build for production |
-| `make test-backend` | Run backend tests |
-| `make test-frontend` | Run frontend tests |
-| `make clean` | Clean build artifacts |
-| `make reset` | Reset database and builds |
-| `make seed` | Populate database with sample data |
-| `make db-status` | Check database status |
+| Command              | Description                              |
+| -------------------- | ---------------------------------------- |
+| `make help`          | Show all available commands              |
+| `make full-setup`    | Complete setup (install + config + seed) |
+| `make dev`           | Start development servers                |
+| `make build`         | Build for production                     |
+| `make test-backend`  | Run backend tests                        |
+| `make test-frontend` | Run frontend tests                       |
+| `make clean`         | Clean build artifacts                    |
+| `make reset`         | Reset database and builds                |
+| `make seed`          | Populate database with sample data       |
+| `make db-status`     | Check database status                    |
 
 ## 🧪 Testing the Application
 
@@ -143,6 +147,7 @@ Visit http://localhost:3000/search and try searching for:
 ### 2. Card Detail Pages
 
 Click on any search result to view:
+
 - **Price history charts** with 5 years of data
 - **Current market listings** from eBay and TCGPlayer
 - **All-time high/low prices** with dates
@@ -180,18 +185,21 @@ VITE_APP_DESCRIPTION=Professional Trading Card Analysis
 ## 📊 Features Overview
 
 ### 🔓 Public Features
+
 - **Advanced Search** - Find cards by name, game, set, rarity
 - **Price History** - 5 years of historical data with charts
 - **Market Listings** - Current eBay and TCGPlayer listings
 - **Technical Analysis** - Basic indicators for all users
 
 ### 🔒 Premium Features (Registered Users)
+
 - **Dashboard** - Personal analytics and saved charts
 - **Advanced Indicators** - Up to 10 technical indicators (vs 3 for free)
 - **Price Alerts** - Get notified of price changes
 - **Chart Saving** - Save and share your analysis
 
 ### 📈 Technical Indicators (Coming Soon)
+
 - **Bollinger Bands** - Volatility analysis
 - **RSI** - Relative Strength Index
 - **Moving Averages** - SMA, EMA analysis
@@ -207,6 +215,7 @@ make build
 ```
 
 This creates:
+
 - `backend/bin/server` - Compiled Go binary
 - `frontend/dist/` - Static assets with SSR
 
@@ -215,6 +224,7 @@ This creates:
 Update production environment files:
 
 **Backend (.env):**
+
 ```env
 PORT=8080
 MONGODB_URI=mongodb://your-production-mongodb:27017
@@ -227,6 +237,7 @@ ENVIRONMENT=production
 ```
 
 **Frontend (.env.production):**
+
 ```env
 VITE_API_BASE_URL=https://api.your-domain.com
 VITE_APP_TITLE=MonMetrics
@@ -255,19 +266,55 @@ MonMetrics implements **OWASP Secure Coding Practices**:
 
 ### Common Issues
 
+**❌ Go Version Mismatch Error**
+
+```
+compile: version "go1.24.2" does not match go tool version "go1.22.2"
+```
+
+**Root Cause:** Multiple Go versions installed, causing package cache conflicts.
+
+**Solution:**
+
+```bash
+# Check Go version
+go version
+
+# If you see the wrong version, update PATH
+export PATH=/usr/local/go/bin:$PATH
+
+# Add to .bashrc for persistence
+echo 'export PATH=/usr/local/go/bin:$PATH' >> ~/.bashrc
+source ~/.bashrc
+
+# Clean all caches
+cd backend
+go clean -cache -modcache
+go mod tidy
+
+# Retry setup
+cd ..
+make seed
+```
+
+**Alternative:** Update `backend/go.mod` to match your Go version.
+
 **❌ MongoDB Connection Failed**
+
 ```bash
 make reset
 make setup
 ```
 
 **❌ Port Already in Use**
+
 ```bash
 make check-ports  # Check what's using ports
 # Kill processes using ports 3000, 8080, or 27017
 ```
 
 **❌ Frontend Build Fails**
+
 ```bash
 cd frontend
 rm -rf node_modules package-lock.json
@@ -275,6 +322,7 @@ npm install
 ```
 
 **❌ Backend Won't Start**
+
 ```bash
 cd backend
 go mod tidy
@@ -282,14 +330,36 @@ go clean -cache
 ```
 
 **❌ Database Empty After Seeding**
+
 ```bash
 make reset        # Reset everything
 make full-setup   # Complete setup again
 ```
 
+**❌ WSL-Specific Issues**
+
+If you're using WSL and encounter permission or path issues:
+
+```bash
+# Ensure Docker Desktop is running
+docker ps
+
+# Check WSL integration is enabled in Docker Desktop settings
+# Settings → Resources → WSL Integration
+
+# Verify Go installation
+which go
+go version
+
+# If PATH issues persist
+export GOROOT=/usr/local/go
+export PATH=$GOROOT/bin:$PATH
+```
+
 ### Getting Help
 
 Check system information:
+
 ```bash
 make info        # Show versions and status
 make db-status   # Check database
@@ -299,6 +369,7 @@ make logs        # Show container logs
 ## 🎯 API Endpoints
 
 ### Public Endpoints
+
 ```
 GET  /health                    # Health check
 POST /api/auth/register         # User registration
@@ -309,6 +380,7 @@ GET  /api/cards/{id}/prices     # Get price history
 ```
 
 ### Protected Endpoints (Require Authentication)
+
 ```
 GET  /api/protected/user/dashboard        # User dashboard
 POST /api/protected/user/charts           # Save chart
@@ -319,16 +391,19 @@ DEL  /api/protected/user/charts/{id}      # Delete chart
 ### Example API Usage
 
 **Search Cards:**
+
 ```bash
 curl "http://localhost:8080/api/cards/search?q=charizard&game=Pokemon&limit=10"
 ```
 
 **Get Card Details:**
+
 ```bash
 curl "http://localhost:8080/api/cards/CARD_ID"
 ```
 
 **Get Price History:**
+
 ```bash
 curl "http://localhost:8080/api/cards/CARD_ID/prices?range=30d"
 ```
@@ -336,18 +411,21 @@ curl "http://localhost:8080/api/cards/CARD_ID/prices?range=30d"
 ## 🛣️ Roadmap
 
 ### Phase 1 (Current)
+
 - ✅ Core search and price tracking
 - ✅ Basic technical indicators
 - ✅ User authentication
 - ✅ Dashboard functionality
 
 ### Phase 2 (Next)
+
 - 🔲 Advanced technical indicators
 - 🔲 Price alerts and notifications
 - 🔲 Mobile responsive design
 - 🔲 Data export capabilities
 
 ### Phase 3 (Future)
+
 - 🔲 Mobile applications (iOS/Android)
 - 🔲 Machine learning price predictions
 - 🔲 Social features and community
@@ -356,13 +434,15 @@ curl "http://localhost:8080/api/cards/CARD_ID/prices?range=30d"
 ## 💎 Tech Stack Details
 
 ### Backend
-- **Language:** Go 1.21+ (pure stdlib, no frameworks)
+
+- **Language:** Go 1.24.2+ (pure stdlib, no frameworks)
 - **Database:** MongoDB 7.0 with text search indexes
 - **Authentication:** JWT with HMAC-SHA256
 - **Security:** OWASP compliant middleware stack
 - **Performance:** Single binary deployment
 
 ### Frontend
+
 - **Framework:** React 19 with native SSR
 - **Build Tool:** Vite 5.0 for fast development
 - **Styling:** Tailwind CSS for modern design
@@ -372,6 +452,7 @@ curl "http://localhost:8080/api/cards/CARD_ID/prices?range=30d"
 - **TypeScript:** Full type safety
 
 ### Infrastructure
+
 - **Development:** Docker Compose for local setup
 - **Database:** MongoDB with replica set support
 - **Caching:** Built-in Go caching mechanisms
@@ -384,6 +465,7 @@ This project is proprietary software. All rights reserved.
 ## 📧 Support
 
 For support and questions:
+
 - Create an issue in the repository
 - Check the troubleshooting section above
 - Review the API documentation

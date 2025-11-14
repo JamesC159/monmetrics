@@ -8,38 +8,234 @@
   }
 
   body {
-    @apply bg-slate-900 text-white font-sans;
+    @apply bg-dark-950 text-gray-100 font-body antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-bold;
   }
 }
 
 @layer components {
+  /* Glass morphism effects */
   .glass-effect {
-    @apply bg-white/10 backdrop-blur-md border border-white/20;
+    @apply bg-white/5 backdrop-blur-md border border-white/10;
   }
 
-  .gradient-text {
-    @apply bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent;
+  .glass-effect-strong {
+    @apply bg-white/10 backdrop-blur-xl border border-white/20;
   }
 
-  .button-primary {
-    @apply bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:shadow-blue-500/25;
+  /* Gradient text utilities */
+  .gradient-text-gold {
+    @apply bg-gradient-gold bg-clip-text text-transparent;
   }
 
-  .button-secondary {
-    @apply bg-white/10 hover:bg-white/20 text-white font-semibold py-3 px-6 rounded-lg border border-white/20 transition-all duration-300;
+  .gradient-text-cyan {
+    @apply bg-gradient-cyan bg-clip-text text-transparent;
+  }
+
+  .gradient-text-purple {
+    @apply bg-gradient-purple bg-clip-text text-transparent;
+  }
+
+  .gradient-text-cosmic {
+    @apply bg-gradient-cosmic bg-clip-text text-transparent;
+  }
+
+  /* Button variants */
+  .btn-primary {
+    @apply bg-gradient-gold hover:shadow-glow-gold text-dark-950 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
+  }
+
+  .btn-secondary {
+    @apply bg-gradient-cyan hover:shadow-glow-cyan text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
+  }
+
+  .btn-accent {
+    @apply bg-gradient-purple hover:shadow-glow-purple text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
+  }
+
+  .btn-ghost {
+    @apply bg-white/5 hover:bg-white/10 text-white font-semibold py-3 px-6 rounded-lg border border-white/20 transition-all duration-300;
+  }
+
+  .btn-outline-gold {
+    @apply bg-transparent border-2 border-primary-500 text-primary-400 hover:bg-primary-500 hover:text-dark-950 font-bold py-3 px-6 rounded-lg transition-all duration-300;
+  }
+
+  /* Card styles */
+  .card {
+    @apply bg-dark-900/80 backdrop-blur-sm rounded-xl p-6 border border-white/10 shadow-card;
   }
 
   .card-hover {
-    @apply transition-all duration-300 hover:transform hover:scale-105 hover:shadow-xl;
+    @apply transition-all duration-300 hover:transform hover:scale-105 hover:shadow-card-hover hover:border-primary-500/50;
   }
 
+  .card-interactive {
+    @apply cursor-pointer transition-all duration-300 hover:transform hover:-translate-y-1 hover:shadow-glow-gold hover:border-primary-500/50;
+  }
+
+  /* Gaming/TCG specific elements */
+  .treasure-card {
+    @apply bg-gradient-to-br from-primary-900/30 via-dark-900 to-dark-950 border-2 border-primary-500/30 rounded-xl p-6 shadow-glow-gold;
+  }
+
+  .rarity-common {
+    @apply border-l-4 border-gray-400;
+  }
+
+  .rarity-uncommon {
+    @apply border-l-4 border-success-500;
+  }
+
+  .rarity-rare {
+    @apply border-l-4 border-secondary-400;
+  }
+
+  .rarity-mythic {
+    @apply border-l-4 border-accent-500;
+  }
+
+  .rarity-legendary {
+    @apply border-l-4 border-primary-400;
+  }
+
+  /* Badge styles */
+  .badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold;
+  }
+
+  .badge-gold {
+    @apply bg-primary-500/20 text-primary-400 border border-primary-500/40;
+  }
+
+  .badge-cyan {
+    @apply bg-secondary-500/20 text-secondary-400 border border-secondary-500/40;
+  }
+
+  .badge-purple {
+    @apply bg-accent-500/20 text-accent-400 border border-accent-500/40;
+  }
+
+  .badge-success {
+    @apply bg-success-500/20 text-success-400 border border-success-500/40;
+  }
+
+  .badge-warning {
+    @apply bg-warning-500/20 text-warning-400 border border-warning-500/40;
+  }
+
+  .badge-error {
+    @apply bg-error-500/20 text-error-400 border border-error-500/40;
+  }
+
+  /* Input styles */
+  .input {
+    @apply w-full px-4 py-3 bg-dark-800/50 border border-white/10 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all;
+  }
+
+  .input-error {
+    @apply border-error-500 focus:border-error-500 focus:ring-error-500/20;
+  }
+
+  /* Loading spinner */
   .loading-spinner {
-    @apply animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500;
+    @apply animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500;
+  }
+
+  /* Navigation styles */
+  .nav-link {
+    @apply text-gray-300 hover:text-white transition-colors duration-200 font-medium;
+  }
+
+  .nav-link-active {
+    @apply text-primary-400 font-semibold;
+  }
+
+  /* Section backgrounds */
+  .section-dark {
+    @apply bg-dark-950;
+  }
+
+  .section-darker {
+    @apply bg-black/50;
+  }
+
+  .section-gradient {
+    @apply bg-gradient-to-br from-dark-900 via-dark-950 to-black;
+  }
+
+  /* Decorative elements */
+  .divider {
+    @apply border-t border-white/10;
+  }
+
+  .divider-gold {
+    @apply border-t-2 border-gradient-gold;
+  }
+
+  /* Tooltips */
+  .tooltip {
+    @apply absolute z-50 px-3 py-2 text-sm bg-dark-800 border border-white/20 rounded-lg shadow-xl;
+  }
+
+  /* Shimmer effect for loading states */
+  .shimmer {
+    @apply relative overflow-hidden;
+  }
+
+  .shimmer::before {
+    content: '';
+    @apply absolute inset-0 bg-shimmer-gradient animate-shimmer;
+    background-size: 200% 100%;
+  }
+
+  /* Price change indicators */
+  .price-up {
+    @apply text-success-400 font-semibold;
+  }
+
+  .price-down {
+    @apply text-error-400 font-semibold;
+  }
+
+  .price-neutral {
+    @apply text-gray-400;
   }
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
+  }
+
+  /* Custom scrollbar */
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    @apply bg-dark-900;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-gray-700 rounded-full;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-600;
+  }
+
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }

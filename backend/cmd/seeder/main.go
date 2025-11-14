@@ -16,6 +16,46 @@ import (
 	"github.com/jamesc159/monmetrics/internal/models"
 )
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// getRandomCondition returns a random card condition
+func getRandomCondition() string {
+	conditions := []string{"Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"}
+	return conditions[rand.Intn(len(conditions))]
+}
+
+// getRandomSeller returns a random seller name
+func getRandomSeller() string {
+	sellers := []string{
+		"CardMaster2024",
+		"TradingCardPro",
+		"CollectorHaven",
+		"CardVault",
+		"GamingCards123",
+		"MintConditionOnly",
+		"CardLegends",
+		"TopDeckGaming",
+	}
+	return sellers[rand.Intn(len(sellers))]
+}
+
+// getRandomSource returns a random data source
+func getRandomSource() string {
+	sources := []string{"ebay", "tcgplayer"}
+	return sources[rand.Intn(len(sources))]
+}
+
+// timePtr returns a pointer to a time.Time value
+func timePtr(t time.Time) *time.Time {
+	return &t
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MAIN SEEDING LOGIC
+// ═══════════════════════════════════════════════════════════════════════════════
+
 func main() {
 	// Load configuration
 	config := configs.Load()
@@ -62,7 +102,9 @@ func main() {
 
 	// Seed cards with comprehensive sample data
 	cards := []models.Card{
-		// Pokemon Cards
+		// ═══════════════════════════════════════════════════════════════
+		// POKEMON CARDS - Individual Trading Cards
+		// ═══════════════════════════════════════════════════════════════
 		{
 			Name:           "Charizard VMAX",
 			Set:            "Champions Path",
@@ -344,7 +386,9 @@ func main() {
 			UpdatedAt:      time.Now(),
 		},
 
-		// Magic The Gathering Cards
+		// ═══════════════════════════════════════════════════════════════
+		// MAGIC THE GATHERING CARDS - Individual Trading Cards
+		// ═══════════════════════════════════════════════════════════════
 		{
 			Name:           "Black Lotus",
 			Set:            "Alpha",
@@ -626,7 +670,9 @@ func main() {
 			UpdatedAt:      time.Now(),
 		},
 
-		// Yu-Gi-Oh Cards
+		// ═══════════════════════════════════════════════════════════════
+		// YU-GI-OH CARDS - Individual Trading Cards
+		// ═══════════════════════════════════════════════════════════════
 		{
 			Name:           "Blue-Eyes White Dragon",
 			Set:            "Legend of Blue Eyes White Dragon",
@@ -888,7 +934,9 @@ func main() {
 			UpdatedAt:      time.Now(),
 		},
 
-		// Sealed Products - Pokemon
+		// ═══════════════════════════════════════════════════════════════
+		// SEALED PRODUCTS - POKEMON
+		// ═══════════════════════════════════════════════════════════════
 		{
 			Name:           "Pokemon Base Set Booster Box",
 			Set:            "Base Set",
@@ -1090,8 +1138,9 @@ func main() {
 			UpdatedAt:      time.Now(),
 		},
 
-		// Sealed Products - Magic The Gathering
-		// Sealed Products - Magic The Gathering
+		// ═══════════════════════════════════════════════════════════════
+		// SEALED PRODUCTS - MAGIC THE GATHERING
+		// ═══════════════════════════════════════════════════════════════
 		{
 			Name:           "Magic Alpha Starter Deck",
 			Set:            "Alpha",
@@ -1293,8 +1342,9 @@ func main() {
 			UpdatedAt:      time.Now(),
 		},
 
-		// Sealed Products - Yu-Gi-Oh
-		// Sealed Products - Yu-Gi-Oh
+		// ═══════════════════════════════════════════════════════════════
+		// SEALED PRODUCTS - YU-GI-OH
+		// ═══════════════════════════════════════════════════════════════
 		{
 			Name:           "Yu-Gi-Oh LOB Booster Box",
 			Set:            "Legend of Blue Eyes White Dragon",
@@ -1746,6 +1796,10 @@ func main() {
 	fmt.Println("   Frontend: http://localhost:3000")
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// INDEX CREATION
+// ═══════════════════════════════════════════════════════════════════════════════
+
 // createSearchIndexes creates MongoDB text search indexes for better search performance
 func createSearchIndexes(ctx context.Context, db *mongo.Database) {
 	cardsCollection := db.Collection("cards")
@@ -1794,24 +1848,4 @@ func createSearchIndexes(ctx context.Context, db *mongo.Database) {
 	} else {
 		fmt.Println("   ✅ Created indexes for price history")
 	}
-}
-
-func getRandomCondition() string {
-	conditions := []string{"Near Mint", "Lightly Played", "Moderately Played", "Heavily Played", "Damaged"}
-	return conditions[rand.Intn(len(conditions))]
-}
-
-func getRandomSeller() string {
-	sellers := []string{"CardMaster2024", "TradingCardPro", "CollectorHaven", "CardVault", "GamingCards123", "MintConditionOnly", "CardLegends", "TopDeckGaming"}
-	return sellers[rand.Intn(len(sellers))]
-}
-
-func getRandomSource() string {
-	sources := []string{"ebay", "tcgplayer"}
-	return sources[rand.Intn(len(sources))]
-}
-
-// timePtr returns a pointer to a time.Time value
-func timePtr(t time.Time) *time.Time {
-	return &t
 }
