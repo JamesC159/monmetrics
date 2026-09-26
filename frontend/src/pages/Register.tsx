@@ -157,7 +157,7 @@ export default function Register() {
 
   return (
     <Layout>
-      <div className='min-h-screen bg-gradient-to-br from-dark-900 via-dark-950 to-black flex items-center justify-center px-4 py-12'>
+      <div className='min-h-screen bg-dark-900 flex items-center justify-center px-4 py-12'>
         {/* Decorative background elements */}
         <div className='absolute top-20 right-10 w-96 h-96 bg-secondary-500/10 rounded-full blur-3xl'></div>
         <div className='absolute bottom-20 left-10 w-72 h-72 bg-primary-500/10 rounded-full blur-3xl'></div>
@@ -175,7 +175,7 @@ export default function Register() {
 
               <div className='flex items-center mb-4'>
                 <Sparkles className='w-8 h-8 text-secondary-400 mr-3 animate-pulse' />
-                <h1 className='text-3xl font-display font-bold gradient-text-cyan'>
+                <h1 className='text-3xl font-display font-bold text-secondary-300'>
                   Create Account
                 </h1>
               </div>

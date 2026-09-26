@@ -12,7 +12,7 @@ export const Footer = () => {
           <div className='space-y-4'>
             <Link to='/' className='flex items-center group'>
               <Sparkles className='w-6 h-6 text-primary-400 mr-2 group-hover:animate-pulse' />
-              <h3 className='text-2xl font-display font-bold gradient-text-gold'>MonMetrics</h3>
+              <h3 className='text-2xl font-display font-bold text-primary-200'>MonMetrics</h3>
             </Link>
             <p className='text-gray-400 text-sm'>
               Professional trading analysis for the modern card collector.

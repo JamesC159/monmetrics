@@ -1,0 +1,22 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+cmd = "go build -o ./tmp/server ./cmd/server"
+bin = "./tmp/server"
+include_ext = ["go", "env"]
+exclude_dir = ["bin", "tmp", "vendor"]
+exclude_regex = ["_test\\.go"]
+delay = 300
+stop_on_error = false
+send_interrupt = true
+kill_delay = 2000000000
+# inotify does not fire for Windows-mounted paths under WSL
+poll = true
+poll_interval = 500
+
+[log]
+time = true
+
+[misc]
+clean_on_exit = true

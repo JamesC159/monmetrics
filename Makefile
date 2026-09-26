@@ -1,10 +1,10 @@
 # MonMetrics Development Makefile
 # Provides easy commands for development workflow
 
-# Ensure we use Go 1.24.2 from /usr/local/go
-export PATH := /usr/local/go/bin:$(PATH)
+# Ensure we use Go 1.24.2 from /usr/local/go and Go tool binaries (air) are on PATH
+export PATH := /usr/local/go/bin:$(HOME)/go/bin:$(PATH)
 
-.PHONY: help install dev build preview clean setup seed test-backend test-frontend lint-frontend type-check start-prod dev-docker
+.PHONY: help install install-tools dev build preview clean setup seed test-backend test-frontend lint-frontend type-check start-prod dev-docker
 
 # Default target - show help
 help:
@@ -12,6 +12,7 @@ help:
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 	@echo "📦 Setup Commands:"
 	@echo "  make install     - Install all dependencies"
+	@echo "  make install-tools - Install dev tools (air live reload)"
 	@echo "  make setup       - Initial project setup with .env files"
 	@echo "  make seed        - Populate database with sample data"
 	@echo "  make full-setup  - Complete setup (install + setup + seed)"
@@ -45,10 +46,19 @@ install:
 	cd backend && go mod tidy
 	@echo "Installing frontend dependencies..."
 	cd frontend && npm install
+	@$(MAKE) install-tools
 	@echo "✅ Dependencies installed successfully!"
 
+# Install Go dev tooling (live reload)
+install-tools:
+	@command -v air >/dev/null 2>&1 || { \
+		echo "📥 Installing air (Go live reload)..."; \
+		cd backend && go install github.com/air-verse/air@latest; \
+	}
+	@echo "✅ Dev tools ready (air)"
+
 # Start development servers
-dev:
+dev: install-tools
 	@echo "🚀 Starting development environment..."
 	@echo "Starting MongoDB..."
 	@docker-compose up -d mongodb
@@ -58,12 +68,12 @@ dev:
 	@echo "Backend: http://localhost:8080"
 	@echo "Frontend: http://localhost:3000"
 	@echo "Health Check: http://localhost:8080/health"
-	@echo "API Docs: See endpoints in terminal output"
+	@echo "🔁 Hot reload: Go (air) + Vite HMR — no restarts needed"
 	@echo ""
 	@echo "Press Ctrl+C to stop all servers"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@trap 'echo "\n🛑 Stopping servers..."; docker-compose stop; exit 0' INT; \
-	(cd backend && go run cmd/server/main.go) & \
+	@trap 'echo "\n🛑 Stopping servers..."; kill 0; docker-compose stop; exit 0' INT TERM; \
+	(cd backend && air -c .air.toml) & \
 	(cd frontend && npm run dev) & \
 	wait
 
@@ -84,7 +94,7 @@ preview:
 # Clean build artifacts
 clean:
 	@echo "🧹 Cleaning build artifacts..."
-	cd backend && rm -rf bin/
+	cd backend && rm -rf bin/ tmp/
 	cd frontend && rm -rf dist/
 	@echo "🗑️ Stopping containers..."
 	@docker-compose down
@@ -140,7 +150,7 @@ seed:
 	@echo "🧹 Cleaning Go build cache..."
 	@cd backend && go clean -cache
 	@echo "🔨 Building seeder..."
-	@cd backend && go build -o bin/seeder cmd/seeder/main.go
+	@cd backend && go build -o bin/seeder ./cmd/seeder
 	@echo "🚀 Running database seeder..."
 	@cd backend && ./bin/seeder
 	@echo ""

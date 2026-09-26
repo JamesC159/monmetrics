@@ -44,6 +44,75 @@ export interface PricePoint {
   created_at: string
 }
 
+export type ChartTimeRange = '1d' | '7d' | '30d' | '90d' | '1y' | '5y'
+export type ChartSource = 'all' | 'ebay' | 'tcgplayer'
+export type ChartType = 'line' | 'candle'
+
+export type DrawingType = 'trendline' | 'hline' | 'rect' | 'text' | 'freehand' | 'fib'
+
+export interface DrawingPoint {
+  /** Unix seconds */
+  time: number
+  price: number
+}
+
+export interface ChartDrawing {
+  id: string
+  type: DrawingType
+  points: DrawingPoint[]
+  color: string
+  text?: string
+  line_width: number
+}
+
+export type AlertCondition = 'above' | 'below' | 'pct_change' | 'ema_cross'
+export type AlertDirection = 'up' | 'down' | 'either'
+export type AlertMode = 'once' | 'recurring'
+
+export interface PriceAlertRequest {
+  card_id: string
+  source: ChartSource
+  condition: AlertCondition
+  target_price?: number
+  pct?: number
+  days?: number
+  ema_period?: number
+  direction?: AlertDirection
+  mode: AlertMode
+  cooldown_hours?: number
+  notify_email: boolean
+  note?: string
+  active?: boolean
+}
+
+export interface PriceAlert extends Omit<PriceAlertRequest, 'active'> {
+  id: string
+  user_id: string
+  active: boolean
+  last_price?: number
+  last_triggered_at?: string
+  trigger_count: number
+  created_at: string
+  updated_at: string
+  card_name?: string
+  card_image_url?: string
+}
+
+export interface AppNotification {
+  id: string
+  alert_id?: string
+  card_id?: string
+  title: string
+  message: string
+  read: boolean
+  created_at: string
+}
+
+export interface NotificationList {
+  notifications: AppNotification[]
+  unread_count: number
+}
+
 export interface SavedChart {
   id: string
   user_id: string
@@ -51,9 +120,28 @@ export interface SavedChart {
   name: string
   description?: string
   indicators: ChartIndicator[]
-  time_range: '1d' | '7d' | '30d' | '90d' | '1y' | '5y'
+  time_range: ChartTimeRange
+  source: ChartSource
+  chart_type?: ChartType
+  show_volume?: boolean
+  drawings?: ChartDrawing[]
   created_at: string
   updated_at: string
+  card_name?: string
+  card_image_url?: string
+  card_game?: string
+}
+
+export interface SavedChartRequest {
+  card_id: string
+  name: string
+  description: string
+  indicators: ChartIndicator[]
+  time_range: ChartTimeRange
+  source: ChartSource
+  chart_type: ChartType
+  show_volume: boolean
+  drawings: ChartDrawing[]
 }
 
 export interface ChartIndicator {
@@ -99,8 +187,11 @@ export interface SearchResult {
 export interface PriceHistory {
   prices: PricePoint[]
   listings: Listing[]
-  range: string
-  total: number
+  range?: string
+  total?: number
+  card_id?: string
+  time_range?: string
+  visible_from?: string
   market_data?: MarketData[]
   indicators?: Record<string, IndicatorPoint[]>
 }
@@ -112,9 +203,236 @@ export interface IndicatorPoint {
 }
 
 export interface Dashboard {
+  user?: User
   saved_charts: SavedChart[]
   recently_viewed: Card[]
   user_stats: UserStats
+  favorites_count: number
+  portfolio_summary?: PortfolioSummary
+}
+
+// Favorites
+
+export interface FavoriteView {
+  id: string
+  card_id: string
+  created_at: string
+  card?: Card
+  change_7d: number
+  change_7d_value: number
+  change_30d: number
+  change_30d_value: number
+}
+
+// Portfolio
+
+export type PortfolioItemType = 'raw_card' | 'graded_card' | 'sealed'
+export type ConditionCode = 'NM' | 'LP' | 'MP' | 'HP' | 'DMG'
+export type GradingCompany = 'PSA' | 'BGS' | 'CGC' | 'SGC'
+export type CardFinish = '' | 'normal' | 'holo' | 'reverse_holo' | 'foil' | '1st_edition'
+export type ValueSource = 'market' | 'graded_estimate' | 'manual' | 'none'
+
+export interface Grading {
+  company: GradingCompany
+  grade: number
+  cert_number?: string
+}
+
+export interface PortfolioItem {
+  id: string
+  user_id: string
+  card_id?: string
+  item_type: PortfolioItemType
+  custom_name?: string
+  custom_game?: string
+  custom_set?: string
+  custom_image_url?: string
+  quantity: number
+  condition?: ConditionCode
+  finish?: CardFinish
+  language?: string
+  grading?: Grading
+  purchase_price: number
+  purchase_date?: string
+  purchase_source?: string
+  manual_value?: number
+  notes?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface PortfolioItemView extends PortfolioItem {
+  card?: Card
+  card_unavailable?: boolean
+  display_name: string
+  display_game: string
+  display_set: string
+  display_image_url: string
+  unit_value: number
+  total_value: number
+  cost_basis: number
+  gain_loss: number
+  gain_loss_pct: number
+  value_source: ValueSource
+  multiplier: number
+}
+
+export interface PortfolioItemRequest {
+  card_id: string
+  item_type: PortfolioItemType
+  custom_name: string
+  custom_game: string
+  custom_set: string
+  custom_image_url: string
+  quantity: number
+  condition: ConditionCode | ''
+  finish: CardFinish
+  language: string
+  grading: Grading | null
+  purchase_price: number
+  purchase_date: string
+  purchase_source: string
+  manual_value: number | null
+  notes: string
+}
+
+export interface AllocationSlice {
+  key: string
+  value: number
+  count: number
+}
+
+export interface PortfolioMover {
+  id: string
+  display_name: string
+  gain_loss: number
+  gain_loss_pct: number
+}
+
+export interface PortfolioSummary {
+  total_value: number
+  cost_basis: number
+  gain_loss: number
+  gain_loss_pct: number
+  item_count: number
+  unit_count: number
+  unvalued_count: number
+  by_game: AllocationSlice[]
+  by_item_type: AllocationSlice[]
+  top_gainers: PortfolioMover[]
+  top_losers: PortfolioMover[]
+}
+
+export interface PortfolioResponse {
+  items: PortfolioItemView[]
+  summary: PortfolioSummary
+}
+
+export interface PortfolioQuery {
+  game?: string
+  item_type?: PortfolioItemType | ''
+  sort?: 'date' | 'value' | 'gain' | 'name'
+}
+
+// Marketplace
+
+export type MarketplaceProvider = 'ebay' | 'tcgplayer'
+
+export interface LinkedAccount {
+  id: string
+  provider: MarketplaceProvider
+  external_user_id: string
+  external_username: string
+  scopes: string[]
+  expires_at: string
+  status: 'active' | 'expired' | 'revoked'
+  linked_at: string
+  updated_at: string
+}
+
+export interface LinkedAccountStatus {
+  provider: MarketplaceProvider
+  display_name: string
+  linked: boolean
+  account?: LinkedAccount
+  mock: boolean
+}
+
+export interface SoldListing {
+  title: string
+  price: number
+  shipping: number
+  condition: string
+  sold_at: string
+  url?: string
+  source: string
+}
+
+export interface CompsStats {
+  count: number
+  average: number
+  median: number
+  min: number
+  max: number
+  suggested_price: number
+}
+
+export interface CompsResponse {
+  query: string
+  sold: SoldListing[]
+  stats: CompsStats
+}
+
+export interface ItemSpecific {
+  name: string
+  value: string
+}
+
+export interface ListingDraft {
+  portfolio_item_id: string
+  provider: MarketplaceProvider
+  title: string
+  description: string
+  price: number
+  quantity: number
+  max_quantity?: number
+  condition: string
+  category_id: string
+  format: 'fixed_price' | 'auction'
+  duration: string
+  shipping_price: number
+  image_urls: string[]
+  item_specifics: ItemSpecific[]
+}
+
+export interface PrefillResponse {
+  draft: ListingDraft
+  comps: CompsResponse
+}
+
+export interface MarketplaceListing {
+  id: string
+  portfolio_item_id: string
+  card_id?: string
+  provider: MarketplaceProvider
+  external_listing_id?: string
+  status: 'draft' | 'published' | 'failed' | 'ended'
+  title: string
+  description: string
+  price: number
+  quantity: number
+  condition: string
+  category_id?: string
+  format: string
+  duration?: string
+  shipping_price: number
+  image_urls: string[]
+  item_specifics: ItemSpecific[]
+  listing_url?: string
+  error_message?: string
+  created_at: string
+  published_at?: string
+  updated_at: string
 }
 
 export interface UserStats {
@@ -128,8 +446,8 @@ export interface UserStats {
 export interface RegisterRequest {
   email: string
   password: string
-  first_name: string
-  last_name: string
+  firstName: string
+  lastName: string
 }
 
 export interface LoginRequest {
@@ -164,7 +482,11 @@ export interface HealthResponse {
 
 // API Error class
 export class ApiError extends Error {
-  constructor(message: string, public status: number, public response?: any) {
+  constructor(
+    message: string,
+    public status: number,
+    public response?: any,
+  ) {
     super(message)
     this.name = 'ApiError'
   }

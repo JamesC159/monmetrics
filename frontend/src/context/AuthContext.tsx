@@ -46,20 +46,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const validateToken = async () => {
     try {
-      await apiClient.getDashboard()
-      // Extract user from dashboard or create a minimal user object
-      // For now, we'll just mark token as valid
-      // In production, you'd want a dedicated /api/auth/me endpoint
-      setUser({
-        id: '',
-        email: '',
-        first_name: '',
-        last_name: '',
-        user_type: 'free',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        is_active: true,
-      })
+      const dashboard = await apiClient.getDashboard()
+      setUser(
+        dashboard.user ?? {
+          id: '',
+          email: '',
+          first_name: '',
+          last_name: '',
+          user_type: 'free',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          is_active: true,
+        },
+      )
       setIsLoading(false)
     } catch (error) {
       // Token is invalid or endpoint doesn't exist, clear it
@@ -85,8 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response: AuthResponse = await apiClient.register({
         email: data.email,
         password: data.password,
-        first_name: data.firstName,
-        last_name: data.lastName,
+        firstName: data.firstName,
+        lastName: data.lastName,
       })
       apiClient.setToken(response.token)
       setUser(response.user)

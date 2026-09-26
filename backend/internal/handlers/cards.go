@@ -17,6 +17,8 @@ import (
 	"github.com/jamesc159/monmetrics/internal/models"
 )
 
+const maxWarmupDays = 400
+
 // buildSearchFilter creates a robust search filter without relying on text indexes
 func (h *Handlers) buildSearchFilter(query, game, category string) bson.M {
 	filter := bson.M{}
@@ -246,6 +248,20 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 		startDate = now.AddDate(0, 0, -30) // Default to 30 days
 	}
 
+	// Extra history before the visible range lets clients seed indicators such as EMA
+	queryStart := startDate
+	if wd := r.URL.Query().Get("warmup_days"); wd != "" {
+		warmup, err := strconv.Atoi(wd)
+		if err != nil || warmup < 0 {
+			h.sendError(w, "warmup_days must be a non-negative integer", http.StatusBadRequest, nil)
+			return
+		}
+		if warmup > maxWarmupDays {
+			warmup = maxWarmupDays
+		}
+		queryStart = startDate.AddDate(0, 0, -warmup)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
@@ -255,7 +271,7 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 	filter := bson.M{
 		"card_id": objectID,
 		"timestamp": bson.M{
-			"$gte": startDate,
+			"$gte": queryStart,
 			"$lte": now,
 		},
 	}
@@ -274,6 +290,9 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 	if err = cursor.All(ctx, &prices); err != nil {
 		http.Error(w, "Error decoding price history", http.StatusInternalServerError)
 		return
+	}
+	if prices == nil {
+		prices = []models.PricePoint{}
 	}
 
 	// Get current listings
@@ -317,11 +336,12 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 
 	// Build response
 	response := map[string]interface{}{
-		"prices":      prices,
-		"listings":    listings,
-		"market_data": marketData,
-		"card_id":     objectID.Hex(),
-		"time_range":  timeRange,
+		"prices":       prices,
+		"listings":     listings,
+		"market_data":  marketData,
+		"card_id":      objectID.Hex(),
+		"time_range":   timeRange,
+		"visible_from": startDate.UTC(),
 	}
 
 	w.Header().Set("Content-Type", "application/json")

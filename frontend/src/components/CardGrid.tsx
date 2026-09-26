@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react'
 import type { Card } from '../types'
+import FavoriteButton from './FavoriteButton'
 
 interface CardGridProps {
   cards: Card[]
@@ -72,12 +73,15 @@ export default function CardGrid({ cards, columns = 6, showAllDetails = true }: 
               <span
                 className={`px-2 py-1 text-xs rounded-full ${
                   card.category === 'sealed'
-                    ? 'bg-purple-600/80 text-purple-100'
-                    : 'bg-blue-600/80 text-blue-100'
+                    ? 'bg-primary-600/80 text-primary-100'
+                    : 'bg-secondary-600/80 text-secondary-100'
                 }`}
               >
                 {card.category === 'sealed' ? 'Sealed' : 'Card'}
               </span>
+            </div>
+            <div className='absolute bottom-2 right-2'>
+              <FavoriteButton cardId={card.id} />
             </div>
           </div>
 

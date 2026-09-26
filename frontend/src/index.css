@@ -11,7 +11,12 @@
     @apply bg-dark-950 text-gray-100 font-body antialiased;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-display font-bold;
   }
 }
@@ -26,34 +31,17 @@
     @apply bg-white/10 backdrop-blur-xl border border-white/20;
   }
 
-  /* Gradient text utilities */
-  .gradient-text-gold {
-    @apply bg-gradient-gold bg-clip-text text-transparent;
-  }
-
-  .gradient-text-cyan {
-    @apply bg-gradient-cyan bg-clip-text text-transparent;
-  }
-
-  .gradient-text-purple {
-    @apply bg-gradient-purple bg-clip-text text-transparent;
-  }
-
-  .gradient-text-cosmic {
-    @apply bg-gradient-cosmic bg-clip-text text-transparent;
-  }
-
   /* Button variants */
   .btn-primary {
-    @apply bg-gradient-gold hover:shadow-glow-gold text-dark-950 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
+    @apply bg-primary-200 hover:bg-primary-100 text-dark-950 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
   }
 
   .btn-secondary {
-    @apply bg-gradient-cyan hover:shadow-glow-cyan text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
+    @apply bg-secondary-400 hover:bg-secondary-300 text-dark-950 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
   }
 
   .btn-accent {
-    @apply bg-gradient-purple hover:shadow-glow-purple text-white font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
+    @apply bg-accent-400 hover:bg-accent-300 text-dark-950 font-bold py-3 px-6 rounded-lg transition-all duration-300 shadow-lg hover:scale-105;
   }
 
   .btn-ghost {
@@ -79,7 +67,7 @@
 
   /* Gaming/TCG specific elements */
   .treasure-card {
-    @apply bg-gradient-to-br from-primary-900/30 via-dark-900 to-dark-950 border-2 border-primary-500/30 rounded-xl p-6 shadow-glow-gold;
+    @apply bg-dark-900 border-2 border-primary-500/30 rounded-xl p-6 shadow-glow-gold;
   }
 
   .rarity-common {
@@ -115,7 +103,7 @@
     @apply bg-secondary-500/20 text-secondary-400 border border-secondary-500/40;
   }
 
-  .badge-purple {
+  .badge-neutral {
     @apply bg-accent-500/20 text-accent-400 border border-accent-500/40;
   }
 
@@ -163,8 +151,8 @@
     @apply bg-black/50;
   }
 
-  .section-gradient {
-    @apply bg-gradient-to-br from-dark-900 via-dark-950 to-black;
+  .section-surface {
+    @apply bg-dark-900;
   }
 
   /* Decorative elements */
@@ -173,7 +161,7 @@
   }
 
   .divider-gold {
-    @apply border-t-2 border-gradient-gold;
+    @apply border-t-2 border-primary-400;
   }
 
   /* Tooltips */
@@ -188,8 +176,7 @@
 
   .shimmer::before {
     content: '';
-    @apply absolute inset-0 bg-shimmer-gradient animate-shimmer;
-    background-size: 200% 100%;
+    @apply absolute inset-0 bg-white/5;
   }
 
   /* Price change indicators */

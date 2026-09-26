@@ -1769,6 +1769,13 @@ func main() {
 		}
 	}
 
+	// Seed the test user and its feature fixtures (cards were reinserted, so IDs are new)
+	cardIDs := make(map[string]primitive.ObjectID, len(cards))
+	for i, id := range result.InsertedIDs {
+		cardIDs[cards[i].Name] = id.(primitive.ObjectID)
+	}
+	seedTestUser(ctx, db, config, cardIDs)
+
 	// Create text search indexes for better performance
 	fmt.Println("🔍 Creating database indexes for optimal performance...")
 	createSearchIndexes(ctx, db)

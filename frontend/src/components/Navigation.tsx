@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, X, Search, User, LogOut, Home, BarChart3, Sparkles } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import NotificationBell from '@/components/NotificationBell'
 
 export const Navigation = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -23,7 +24,7 @@ export const Navigation = () => {
           {/* Logo */}
           <Link to='/' className='flex items-center group'>
             <Sparkles className='w-6 h-6 text-primary-400 mr-2 group-hover:animate-pulse' />
-            <h1 className='text-2xl font-display font-bold gradient-text-gold'>MonMetrics</h1>
+            <h1 className='text-2xl font-display font-bold text-primary-200'>MonMetrics</h1>
           </Link>
 
           {/* Desktop Navigation */}
@@ -101,12 +102,16 @@ export const Navigation = () => {
           </div>
 
           {/* Mobile Menu Button */}
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className='md:hidden text-gray-300 hover:text-white p-2'
-          >
-            {isMenuOpen ? <X className='w-6 h-6' /> : <Menu className='w-6 h-6' />}
-          </button>
+          <div className='flex items-center gap-1 md:ml-3'>
+            {isAuthenticated && <NotificationBell />}
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className='md:hidden text-gray-300 hover:text-white p-2'
+              aria-label='Toggle menu'
+            >
+              {isMenuOpen ? <X className='w-6 h-6' /> : <Menu className='w-6 h-6' />}
+            </button>
+          </div>
         </div>
       </div>
 

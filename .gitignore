@@ -16,6 +16,7 @@ dist
 dist-ssr
 build
 bin/
+backend/tmp/
 *.local
 
 # Environment variables
@@ -38,6 +39,7 @@ bin/
 # Testing
 coverage/
 .nyc_output
+*.md
 
 # ESLint cache
 .eslintcache

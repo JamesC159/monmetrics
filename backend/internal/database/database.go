@@ -140,7 +140,7 @@ func createIndexes(db *mongo.Database) error {
 			Keys: bson.D{{Key: "card_id", Value: 1}, {Key: "source", Value: 1}, {Key: "timestamp", Value: -1}},
 		},
 		{
-			Keys: bson.D{{Key: "timestamp", Value: 1}},
+			Keys:    bson.D{{Key: "timestamp", Value: 1}},
 			Options: options.Index().SetExpireAfterSeconds(int32((5 * 365 * 24 * time.Hour).Seconds())), // 5 years TTL
 		},
 	})
@@ -189,6 +189,37 @@ func createIndexes(db *mongo.Database) error {
 	})
 	if err != nil {
 		fmt.Printf("Warning: Failed to create listing indexes: %v\n", err)
+	}
+
+	featureIndexes := map[string][]mongo.IndexModel{
+		"favorites": {
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "card_id", Value: 1}}, Options: options.Index().SetUnique(true)},
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
+		},
+		"portfolio_items": {
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "card_id", Value: 1}}},
+		},
+		"linked_accounts": {
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "provider", Value: 1}}, Options: options.Index().SetUnique(true)},
+		},
+		"marketplace_listings": {
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "portfolio_item_id", Value: 1}}},
+		},
+		"price_alerts": {
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "created_at", Value: -1}}},
+			{Keys: bson.D{{Key: "active", Value: 1}, {Key: "card_id", Value: 1}}},
+		},
+		"notifications": {
+			{Keys: bson.D{{Key: "user_id", Value: 1}, {Key: "read", Value: 1}, {Key: "created_at", Value: -1}}},
+			{Keys: bson.D{{Key: "created_at", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(int32((90 * 24 * time.Hour).Seconds()))},
+		},
+	}
+	for name, models := range featureIndexes {
+		if _, err := db.Collection(name).Indexes().CreateMany(ctx, models); err != nil {
+			fmt.Printf("Warning: Failed to create %s indexes: %v\n", name, err)
+		}
 	}
 
 	return nil

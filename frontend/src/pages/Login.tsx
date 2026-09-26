@@ -35,7 +35,7 @@ export default function Login() {
 
   return (
     <Layout>
-      <div className='min-h-screen bg-gradient-to-br from-dark-900 via-dark-950 to-black flex items-center justify-center px-4 py-12'>
+      <div className='min-h-screen bg-dark-900 flex items-center justify-center px-4 py-12'>
         <div className='max-w-md w-full'>
           {/* Decorative elements */}
           <div className='absolute top-20 left-10 w-72 h-72 bg-primary-500/10 rounded-full blur-3xl'></div>
@@ -54,9 +54,7 @@ export default function Login() {
 
                 <div className='flex items-center mb-4'>
                   <Sparkles className='w-8 h-8 text-primary-400 mr-3 animate-pulse' />
-                  <h1 className='text-3xl font-display font-bold gradient-text-gold'>
-                    Welcome Back
-                  </h1>
+                  <h1 className='text-3xl font-display font-bold text-primary-200'>Welcome Back</h1>
                 </div>
                 <p className='text-gray-400'>Sign in to your MonMetrics account</p>
               </div>

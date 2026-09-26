@@ -29,7 +29,10 @@ type UserStats struct {
 
 // Dashboard represents user dashboard data
 type Dashboard struct {
-	SavedCharts    []SavedChart `json:"saved_charts"`
-	RecentlyViewed []Card       `json:"recently_viewed"`
-	UserStats      UserStats    `json:"user_stats"`
+	User             *User             `json:"user,omitempty"`
+	SavedCharts      []SavedChart      `json:"saved_charts"`
+	RecentlyViewed   []Card            `json:"recently_viewed"`
+	UserStats        UserStats         `json:"user_stats"`
+	FavoritesCount   int               `json:"favorites_count"`
+	PortfolioSummary *PortfolioSummary `json:"portfolio_summary,omitempty"`
 }

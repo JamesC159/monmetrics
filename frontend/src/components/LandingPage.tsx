@@ -118,7 +118,7 @@ const LandingPage = () => {
       <Navigation />
 
       {/* Hero Section - More Subtle */}
-      <section className='pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-dark-900 via-dark-950 to-black relative overflow-hidden'>
+      <section className='pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-dark-900 relative overflow-hidden'>
         {/* Decorative background elements */}
         <div className='absolute top-0 left-0 w-96 h-96 bg-primary-500/5 rounded-full blur-3xl'></div>
         <div className='absolute bottom-0 right-0 w-96 h-96 bg-secondary-500/5 rounded-full blur-3xl'></div>
@@ -137,7 +137,7 @@ const LandingPage = () => {
             <h1 className='text-4xl md:text-6xl font-display font-bold text-white mb-6 leading-tight'>
               Smart Analytics for
               <br />
-              <span className='gradient-text-gold'>Trading Card Collectors</span>
+              <span className='text-primary-200'>Trading Card Collectors</span>
             </h1>
 
             <p className='text-lg md:text-xl text-gray-400 mb-12 max-w-3xl mx-auto'>
@@ -155,15 +155,15 @@ const LandingPage = () => {
             {/* Hero Stats */}
             <div className='grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto'>
               <div className='text-center'>
-                <div className='text-3xl font-bold gradient-text-gold mb-2'>1M+</div>
+                <div className='text-3xl font-bold text-primary-200 mb-2'>1M+</div>
                 <div className='text-gray-500 text-sm'>Cards Tracked</div>
               </div>
               <div className='text-center'>
-                <div className='text-3xl font-bold gradient-text-cyan mb-2'>5 Years</div>
+                <div className='text-3xl font-bold text-secondary-300 mb-2'>5 Years</div>
                 <div className='text-gray-500 text-sm'>Price History</div>
               </div>
               <div className='text-center'>
-                <div className='text-3xl font-bold gradient-text-purple mb-2'>10+</div>
+                <div className='text-3xl font-bold text-accent-300 mb-2'>10+</div>
                 <div className='text-gray-500 text-sm'>Indicators</div>
               </div>
               <div className='text-center'>
@@ -181,7 +181,7 @@ const LandingPage = () => {
           <div className='text-center mb-16 animate-fade-in-up'>
             <h2 className='text-4xl md:text-5xl font-display font-bold text-white mb-6'>
               Powerful Features for
-              <span className='gradient-text-gold'> Smart Collecting</span>
+              <span className='text-primary-200'> Smart Collecting</span>
             </h2>
             <p className='text-xl text-gray-400 max-w-3xl mx-auto'>
               Everything you need to make informed trading card investment decisions
@@ -209,7 +209,7 @@ const LandingPage = () => {
       </section>
 
       {/* Demo Section */}
-      <section className='py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-dark-900 via-dark-950 to-black'>
+      <section className='py-20 px-4 sm:px-6 lg:px-8 bg-dark-900'>
         <div className='max-w-7xl mx-auto'>
           <div className='text-center mb-16'>
             <h2 className='text-4xl md:text-5xl font-display font-bold text-white mb-6'>
@@ -223,7 +223,7 @@ const LandingPage = () => {
           <div className='treasure-card'>
             <div className='bg-dark-800/50 rounded-2xl p-6 aspect-video flex items-center justify-center'>
               <div className='text-center'>
-                <div className='w-24 h-24 mx-auto mb-6 bg-gradient-gold rounded-full flex items-center justify-center shadow-glow-gold'>
+                <div className='w-24 h-24 mx-auto mb-6 bg-primary-400 rounded-full flex items-center justify-center shadow-glow-gold'>
                   <Play className='w-12 h-12 text-dark-950 ml-2' />
                 </div>
                 <h3 className='text-2xl font-display font-semibold text-white mb-4'>
@@ -272,7 +272,7 @@ const LandingPage = () => {
                 <div className='text-center mb-8'>
                   <h3 className='text-2xl font-display font-bold text-white mb-4'>{plan.name}</h3>
                   <div className='flex items-baseline justify-center'>
-                    <span className='text-5xl font-bold gradient-text-gold'>{plan.price}</span>
+                    <span className='text-5xl font-bold text-primary-200'>{plan.price}</span>
                     <span className='text-gray-400 ml-2'>/{plan.period}</span>
                   </div>
                 </div>
@@ -301,7 +301,7 @@ const LandingPage = () => {
       </section>
 
       {/* Testimonials */}
-      <section className='py-20 px-4 sm:px-6 lg:px-8 bg-gradient-to-br from-dark-900 via-dark-950 to-black'>
+      <section className='py-20 px-4 sm:px-6 lg:px-8 bg-dark-900'>
         <div className='max-w-7xl mx-auto'>
           <div className='text-center mb-16'>
             <h2 className='text-4xl md:text-5xl font-display font-bold text-white mb-6'>

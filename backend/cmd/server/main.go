@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/jamesc159/monmetrics/configs"
+	"github.com/jamesc159/monmetrics/internal/alerts"
 	"github.com/jamesc159/monmetrics/internal/database"
 	"github.com/jamesc159/monmetrics/internal/handlers"
 	"github.com/jamesc159/monmetrics/internal/middleware"
+	"github.com/jamesc159/monmetrics/internal/notify"
 )
 
 func main() {
@@ -28,7 +30,10 @@ func main() {
 	defer database.Disconnect()
 
 	// Initialize handlers
-	h := handlers.New(db, config)
+	h, err := handlers.New(db, config)
+	if err != nil {
+		log.Fatal("Failed to initialize handlers:", err)
+	}
 
 	// Setup router with middleware
 	mux := http.NewServeMux()
@@ -52,12 +57,46 @@ func main() {
 	apiMux.HandleFunc("POST /auth/login", h.Login)
 	apiMux.HandleFunc("POST /auth/logout", h.Logout)
 
+	// Mock marketplace consent screen (reached by browser redirect; signed state authorizes it)
+	if config.MarketplaceMode == "mock" {
+		apiMux.HandleFunc("GET /marketplace/{provider}/mock-authorize", h.MockAuthorize)
+	}
+
 	// Protected routes (require authentication)
 	protectedMux := http.NewServeMux()
 	protectedMux.HandleFunc("GET /user/dashboard", h.GetDashboard)
 	protectedMux.HandleFunc("POST /user/charts", h.SaveChart)
 	protectedMux.HandleFunc("GET /user/charts", h.GetSavedCharts)
+	protectedMux.HandleFunc("GET /user/charts/{id}", h.GetChart)
+	protectedMux.HandleFunc("PUT /user/charts/{id}", h.UpdateChart)
 	protectedMux.HandleFunc("DELETE /user/charts/{id}", h.DeleteChart)
+
+	protectedMux.HandleFunc("GET /user/alerts", h.GetAlerts)
+	protectedMux.HandleFunc("POST /user/alerts", h.CreateAlert)
+	protectedMux.HandleFunc("PUT /user/alerts/{id}", h.UpdateAlert)
+	protectedMux.HandleFunc("DELETE /user/alerts/{id}", h.DeleteAlert)
+	protectedMux.HandleFunc("GET /user/notifications", h.GetNotifications)
+	protectedMux.HandleFunc("POST /user/notifications/read-all", h.MarkAllNotificationsRead)
+	protectedMux.HandleFunc("POST /user/notifications/{id}/read", h.MarkNotificationRead)
+
+	protectedMux.HandleFunc("GET /favorites", h.GetFavorites)
+	protectedMux.HandleFunc("POST /favorites", h.AddFavorite)
+	protectedMux.HandleFunc("DELETE /favorites/{cardId}", h.RemoveFavorite)
+
+	protectedMux.HandleFunc("GET /portfolio", h.GetPortfolio)
+	protectedMux.HandleFunc("POST /portfolio", h.CreatePortfolioItem)
+	protectedMux.HandleFunc("GET /portfolio/{id}", h.GetPortfolioItem)
+	protectedMux.HandleFunc("PUT /portfolio/{id}", h.UpdatePortfolioItem)
+	protectedMux.HandleFunc("DELETE /portfolio/{id}", h.DeletePortfolioItem)
+
+	protectedMux.HandleFunc("GET /marketplace/accounts", h.GetLinkedAccounts)
+	protectedMux.HandleFunc("GET /marketplace/comps", h.GetComps)
+	protectedMux.HandleFunc("POST /marketplace/listings/prefill", h.PrefillListing)
+	protectedMux.HandleFunc("POST /marketplace/listings", h.CreateListing)
+	protectedMux.HandleFunc("GET /marketplace/listings", h.GetListings)
+	protectedMux.HandleFunc("GET /marketplace/{provider}/connect", h.ConnectMarketplace)
+	protectedMux.HandleFunc("POST /marketplace/{provider}/callback", h.MarketplaceCallback)
+	protectedMux.HandleFunc("DELETE /marketplace/{provider}", h.DisconnectMarketplace)
 
 	// Apply middleware stack to public API routes
 	api := middleware.Chain(
@@ -90,6 +129,21 @@ func main() {
 	}
 
 	// Start server in a goroutine
+	bgCtx, stopBackground := context.WithCancel(context.Background())
+	defer stopBackground()
+	if config.AlertsEnabled {
+		evaluator := &alerts.Evaluator{
+			DB: db,
+			Sender: notify.NewSender(notify.Config{
+				Host: config.SMTPHost, Port: config.SMTPPort, User: config.SMTPUser,
+				Password: config.SMTPPassword, From: config.SMTPFrom,
+			}),
+			Interval:    config.AlertEvalInterval,
+			FrontendURL: config.FrontendURL,
+		}
+		go evaluator.Run(bgCtx)
+	}
+
 	go func() {
 		log.Printf("🚀 MonMetrics server starting on port %s", config.Port)
 		log.Printf("📊 Environment: %s", config.Environment)
@@ -121,6 +175,11 @@ func main() {
 	fmt.Printf("💾 Save Chart:       POST http://localhost:%s/api/protected/user/charts\n", config.Port)
 	fmt.Printf("📋 Get Charts:       GET  http://localhost:%s/api/protected/user/charts\n", config.Port)
 	fmt.Printf("🗑️  Delete Chart:     DEL  http://localhost:%s/api/protected/user/charts/{id}\n", config.Port)
+	fmt.Printf("⭐ Favorites:        GET/POST/DEL http://localhost:%s/api/protected/favorites\n", config.Port)
+	fmt.Printf("🔔 Alerts:           GET/POST/PUT/DEL http://localhost:%s/api/protected/user/alerts\n", config.Port)
+	fmt.Printf("📬 Notifications:    GET  http://localhost:%s/api/protected/user/notifications\n", config.Port)
+	fmt.Printf("💼 Portfolio:        GET/POST/PUT/DEL http://localhost:%s/api/protected/portfolio\n", config.Port)
+	fmt.Printf("🛒 Marketplace:      http://localhost:%s/api/protected/marketplace/* (mode: %s)\n", config.Port, config.MarketplaceMode)
 	fmt.Println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 	fmt.Printf("🎯 Frontend URL:     http://localhost:3000\n")
 	fmt.Println("\n✅ Server is ready to accept connections!")
@@ -131,6 +190,7 @@ func main() {
 	<-quit
 
 	log.Println("🛑 Shutting down server...")
+	stopBackground()
 
 	// Create a deadline for shutdown
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

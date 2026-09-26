@@ -1,14 +1,28 @@
 import type {
-  User,
   Card,
   SearchResult,
   PriceHistory,
   SavedChart,
+  SavedChartRequest,
   Dashboard,
   AuthResponse,
   LoginRequest,
   RegisterRequest,
   SearchParams,
+  FavoriteView,
+  PortfolioResponse,
+  PortfolioQuery,
+  PortfolioItemView,
+  PortfolioItemRequest,
+  LinkedAccountStatus,
+  MarketplaceProvider,
+  CompsResponse,
+  PrefillResponse,
+  ListingDraft,
+  MarketplaceListing,
+  PriceAlert,
+  PriceAlertRequest,
+  NotificationList,
 } from '@/types'
 
 // Safe environment variable access with fallback
@@ -165,8 +179,10 @@ class ApiClient {
     return this.request<Card>(`/api/cards/${id}`)
   }
 
-  async getCardPrices(id: string, range: string = '30d'): Promise<PriceHistory> {
-    return this.request<PriceHistory>(`/api/cards/${id}/prices?range=${range}`)
+  async getCardPrices(id: string, range: string = '30d', warmupDays = 0): Promise<PriceHistory> {
+    const params = new URLSearchParams({ range })
+    if (warmupDays > 0) params.set('warmup_days', String(warmupDays))
+    return this.request<PriceHistory>(`/api/cards/${encodeURIComponent(id)}/prices?${params}`)
   }
 
   // Featured content and organized search
@@ -187,9 +203,7 @@ class ApiClient {
     return this.request<Dashboard>('/api/protected/user/dashboard')
   }
 
-  async saveChart(
-    chart: Omit<SavedChart, 'id' | 'userId' | 'createdAt' | 'updatedAt'>,
-  ): Promise<SavedChart> {
+  async saveChart(chart: SavedChartRequest): Promise<SavedChart> {
     return this.request<SavedChart>('/api/protected/user/charts', {
       method: 'POST',
       body: JSON.stringify(chart),
@@ -200,15 +214,163 @@ class ApiClient {
     return this.request<SavedChart[]>('/api/protected/user/charts')
   }
 
-  async deleteChart(id: string): Promise<void> {
-    return this.request(`/api/protected/user/charts/${id}`, { method: 'DELETE' })
+  async getChart(id: string): Promise<SavedChart> {
+    return this.request<SavedChart>(`/api/protected/user/charts/${encodeURIComponent(id)}`)
   }
 
-  async updateChart(id: string, chart: Partial<SavedChart>): Promise<SavedChart> {
-    return this.request<SavedChart>(`/api/protected/user/charts/${id}`, {
+  async deleteChart(id: string): Promise<void> {
+    return this.request(`/api/protected/user/charts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  async updateChart(id: string, chart: SavedChartRequest): Promise<SavedChart> {
+    return this.request<SavedChart>(`/api/protected/user/charts/${encodeURIComponent(id)}`, {
       method: 'PUT',
       body: JSON.stringify(chart),
     })
+  }
+
+  // Price alerts
+  async getAlerts(cardId?: string): Promise<PriceAlert[]> {
+    const qs = cardId ? `?card_id=${encodeURIComponent(cardId)}` : ''
+    return this.request<PriceAlert[]>(`/api/protected/user/alerts${qs}`)
+  }
+
+  async createAlert(alert: PriceAlertRequest): Promise<PriceAlert> {
+    return this.request<PriceAlert>('/api/protected/user/alerts', {
+      method: 'POST',
+      body: JSON.stringify(alert),
+    })
+  }
+
+  async updateAlert(id: string, alert: PriceAlertRequest): Promise<PriceAlert> {
+    return this.request<PriceAlert>(`/api/protected/user/alerts/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(alert),
+    })
+  }
+
+  async deleteAlert(id: string): Promise<void> {
+    await this.request(`/api/protected/user/alerts/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  // Notifications
+  async getNotifications(unreadOnly = false, limit = 20): Promise<NotificationList> {
+    const params = new URLSearchParams({ limit: String(limit) })
+    if (unreadOnly) params.set('unread', '1')
+    return this.request<NotificationList>(`/api/protected/user/notifications?${params}`)
+  }
+
+  async markNotificationRead(id: string): Promise<void> {
+    await this.request(`/api/protected/user/notifications/${encodeURIComponent(id)}/read`, {
+      method: 'POST',
+    })
+  }
+
+  async markAllNotificationsRead(): Promise<void> {
+    await this.request('/api/protected/user/notifications/read-all', { method: 'POST' })
+  }
+
+  // Favorites
+  async getFavorites(): Promise<FavoriteView[]> {
+    return this.request<FavoriteView[]>('/api/protected/favorites')
+  }
+
+  async addFavorite(cardId: string): Promise<void> {
+    await this.request('/api/protected/favorites', {
+      method: 'POST',
+      body: JSON.stringify({ card_id: cardId }),
+    })
+  }
+
+  async removeFavorite(cardId: string): Promise<void> {
+    await this.request(`/api/protected/favorites/${encodeURIComponent(cardId)}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Portfolio
+  async getPortfolio(query: PortfolioQuery = {}): Promise<PortfolioResponse> {
+    const params = new URLSearchParams()
+    Object.entries(query).forEach(([k, v]) => {
+      if (v) params.set(k, String(v))
+    })
+    const qs = params.toString()
+    return this.request<PortfolioResponse>(`/api/protected/portfolio${qs ? `?${qs}` : ''}`)
+  }
+
+  async getPortfolioItem(id: string): Promise<PortfolioItemView> {
+    return this.request<PortfolioItemView>(`/api/protected/portfolio/${encodeURIComponent(id)}`)
+  }
+
+  async createPortfolioItem(item: PortfolioItemRequest): Promise<PortfolioItemView> {
+    return this.request<PortfolioItemView>('/api/protected/portfolio', {
+      method: 'POST',
+      body: JSON.stringify(item),
+    })
+  }
+
+  async updatePortfolioItem(id: string, item: PortfolioItemRequest): Promise<PortfolioItemView> {
+    return this.request<PortfolioItemView>(`/api/protected/portfolio/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(item),
+    })
+  }
+
+  async deletePortfolioItem(id: string): Promise<void> {
+    await this.request(`/api/protected/portfolio/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  }
+
+  // Marketplace
+  async getLinkedAccounts(): Promise<LinkedAccountStatus[]> {
+    return this.request<LinkedAccountStatus[]>('/api/protected/marketplace/accounts')
+  }
+
+  async connectMarketplace(provider: MarketplaceProvider): Promise<{ auth_url: string }> {
+    return this.request<{ auth_url: string }>(`/api/protected/marketplace/${provider}/connect`)
+  }
+
+  async completeMarketplaceLink(
+    provider: MarketplaceProvider,
+    code: string,
+    state: string,
+  ): Promise<{ provider: string; username: string }> {
+    return this.request(`/api/protected/marketplace/${provider}/callback`, {
+      method: 'POST',
+      body: JSON.stringify({ code, state }),
+    })
+  }
+
+  async disconnectMarketplace(provider: MarketplaceProvider): Promise<void> {
+    await this.request(`/api/protected/marketplace/${provider}`, { method: 'DELETE' })
+  }
+
+  async getComps(portfolioItemId: string, provider: MarketplaceProvider): Promise<CompsResponse> {
+    const params = new URLSearchParams({ portfolio_item_id: portfolioItemId, provider })
+    return this.request<CompsResponse>(`/api/protected/marketplace/comps?${params}`)
+  }
+
+  async prefillListing(
+    portfolioItemId: string,
+    provider: MarketplaceProvider,
+  ): Promise<PrefillResponse> {
+    return this.request<PrefillResponse>('/api/protected/marketplace/listings/prefill', {
+      method: 'POST',
+      body: JSON.stringify({ portfolio_item_id: portfolioItemId, provider }),
+    })
+  }
+
+  async createListing(draft: ListingDraft, publish: boolean): Promise<MarketplaceListing> {
+    return this.request<MarketplaceListing>('/api/protected/marketplace/listings', {
+      method: 'POST',
+      body: JSON.stringify({ draft, publish }),
+    })
+  }
+
+  async getListings(portfolioItemId?: string): Promise<MarketplaceListing[]> {
+    const qs = portfolioItemId ? `?portfolio_item_id=${encodeURIComponent(portfolioItemId)}` : ''
+    return this.request<MarketplaceListing[]>(`/api/protected/marketplace/listings${qs}`)
   }
 }
 

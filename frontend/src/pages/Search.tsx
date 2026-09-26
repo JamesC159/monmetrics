@@ -42,7 +42,7 @@ export default function Search() {
 
   if (loading) {
     return (
-      <div className='min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center'>
+      <div className='min-h-screen bg-dark-900 flex items-center justify-center'>
         <div className='text-center'>
           <Loader className='w-12 h-12 text-blue-500 animate-spin mx-auto mb-4' />
           <h3 className='text-xl font-semibold text-white mb-2'>Loading...</h3>
@@ -53,7 +53,7 @@ export default function Search() {
   }
 
   return (
-    <div className='min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900'>
+    <div className='min-h-screen bg-dark-900'>
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8'>
         <div className='mb-8'>
           <Link

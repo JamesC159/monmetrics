@@ -47,7 +47,7 @@ export default function FeaturedCarousel({
       case 'product':
         return 'bg-blue-600/80 text-blue-100'
       case 'news':
-        return 'bg-purple-600/80 text-purple-100'
+        return 'bg-primary-600/80 text-primary-100'
       case 'pickup':
         return 'bg-green-600/80 text-green-100'
       case 'sponsored':
@@ -94,8 +94,7 @@ export default function FeaturedCarousel({
           }}
         />
 
-        {/* Gradient overlay */}
-        <div className='absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent' />
+        <div className='absolute inset-0 bg-black/60' />
 
         {/* Content */}
         <div className='absolute inset-0 flex flex-col justify-end p-8'>
