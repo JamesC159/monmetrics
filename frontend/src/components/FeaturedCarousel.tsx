@@ -3,6 +3,9 @@ import { ChevronLeft, ChevronRight, TrendingUp, TrendingDown, ExternalLink } fro
 import { Link } from 'react-router-dom'
 import type { FeaturedContent } from '../types'
 
+const FEATURED_PLACEHOLDER =
+  'https://via.placeholder.com/1200x450/374151/9CA3AF?text=Featured+Content'
+
 interface FeaturedCarouselProps {
   items: FeaturedContent[]
   autoPlay?: boolean
@@ -86,19 +89,18 @@ export default function FeaturedCarousel({
       <div className='relative h-96 md:h-[450px]'>
         {/* Blurred backdrop fills the frame around the full image */}
         <img
-          src={currentItem.image_url}
+          src={currentItem.image_url || FEATURED_PLACEHOLDER}
           alt=''
           aria-hidden='true'
           className='absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-60'
         />
 
         <img
-          src={currentItem.image_url}
+          src={currentItem.image_url || FEATURED_PLACEHOLDER}
           alt={currentItem.title}
           className='absolute inset-0 w-full h-full object-contain'
           onError={(e) => {
-            ;(e.target as HTMLImageElement).src =
-              'https://via.placeholder.com/1200x450/374151/9CA3AF?text=Featured+Content'
+            ;(e.target as HTMLImageElement).src = FEATURED_PLACEHOLDER
           }}
         />
 

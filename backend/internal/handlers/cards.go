@@ -207,6 +207,7 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Error decoding results", http.StatusInternalServerError)
 		return
 	}
+	h.stripHiddenImages(cards)
 
 	// Build response
 	response := models.SearchResult{
@@ -249,6 +250,9 @@ func (h *Handlers) GetCard(w http.ResponseWriter, r *http.Request) {
 		}
 		http.Error(w, "Error retrieving card", http.StatusInternalServerError)
 		return
+	}
+	if h.imageHidden(card.Game) {
+		card.ImageURL = ""
 	}
 
 	w.Header().Set("Content-Type", "application/json")

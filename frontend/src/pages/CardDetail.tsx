@@ -15,6 +15,7 @@ import { useAuth } from '../context/AuthContext'
 import { useFeatures } from '../context/FeaturesContext'
 import { useToast } from '../context/ToastContext'
 import { isGradedSeries } from '../utils/grades'
+import { PLACEHOLDER_IMAGE } from '../utils/portfolio'
 import PriceChart from '../components/chart/PriceChart'
 import IndicatorPanel from '../components/chart/IndicatorPanel'
 import SaveChartModal from '../components/chart/SaveChartModal'
@@ -395,12 +396,11 @@ export default function CardDetail() {
             <div className='glass-effect rounded-2xl p-6'>
               <div className='aspect-[3/4] relative overflow-hidden rounded-lg mb-4'>
                 <img
-                  src={card.image_url}
+                  src={card.image_url || PLACEHOLDER_IMAGE}
                   alt={card.name}
                   className='w-full h-full object-cover'
                   onError={(e) => {
-                    ;(e.target as HTMLImageElement).src =
-                      'https://via.placeholder.com/300x400/374151/9CA3AF?text=No+Image'
+                    ;(e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE
                   }}
                 />
                 <div className='absolute top-3 left-3'>

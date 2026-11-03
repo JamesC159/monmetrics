@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -49,6 +50,32 @@ func (h *Handlers) applyEnabledGames(filter bson.M) bson.M {
 	return bson.M{"$and": []bson.M{filter, games}}
 }
 
+// imageHidden reports whether HIDDEN_IMAGE_GAMES withholds images for game, matched like
+// ENABLED_GAMES as a case-insensitive substring.
+func (h *Handlers) imageHidden(game string) bool {
+	if h.config == nil {
+		return false
+	}
+	game = strings.ToLower(game)
+	for _, hidden := range h.config.HiddenImageGames {
+		if strings.Contains(game, strings.ToLower(hidden)) {
+			return true
+		}
+	}
+	return false
+}
+
+// stripHiddenImages blanks image URLs for withheld games. Applied wherever cards are
+// loaded, so search, detail, portfolio, charts, alerts and favorites all drop them and the
+// UI falls back to its placeholder.
+func (h *Handlers) stripHiddenImages(cards []models.Card) {
+	for i := range cards {
+		if h.imageHidden(cards[i].Game) {
+			cards[i].ImageURL = ""
+		}
+	}
+}
+
 // GetGames lists every game present in the catalog with per-category counts.
 func (h *Handlers) GetGames(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
@@ -88,6 +115,11 @@ func (h *Handlers) GetGames(w http.ResponseWriter, r *http.Request) {
 	if err := cursor.All(ctx, &games); err != nil {
 		h.sendError(w, "Error decoding games", http.StatusInternalServerError, nil)
 		return
+	}
+	for i := range games {
+		if h.imageHidden(games[i].Game) {
+			games[i].ImageURL = ""
+		}
 	}
 
 	sendJSON(w, http.StatusOK, games)
@@ -147,6 +179,11 @@ func (h *Handlers) GetSets(w http.ResponseWriter, r *http.Request) {
 	if err := cursor.All(ctx, &sets); err != nil {
 		h.sendError(w, "Error decoding sets", http.StatusInternalServerError, nil)
 		return
+	}
+	for i := range sets {
+		if h.imageHidden(sets[i].Game) {
+			sets[i].ImageURL = ""
+		}
 	}
 
 	sendJSON(w, http.StatusOK, sets)

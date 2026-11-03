@@ -177,8 +177,10 @@ func BuildDraft(provider string, view *models.PortfolioItemView, stats models.Co
 		ImageURLs:       []string{},
 		ItemSpecifics:   buildSpecifics(view, gradeLabel),
 	}
-	if view.DisplayImageURL != "" {
-		draft.ImageURLs = append(draft.ImageURLs, view.DisplayImageURL)
+	// Only the seller's own photo is carried over. The catalog image is a third-party scan
+	// we may not redistribute, and buyers expect pictures of the actual item.
+	if item.CustomImageURL != "" {
+		draft.ImageURLs = append(draft.ImageURLs, item.CustomImageURL)
 	}
 	if provider == models.ProviderEbay {
 		draft.Duration = "GTC"

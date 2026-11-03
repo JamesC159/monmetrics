@@ -349,12 +349,17 @@ export default function ListingComposer({
           </div>
 
           <div className='lg:col-span-2 space-y-4'>
-            {draft.image_urls.length > 0 && (
+            {draft.image_urls.length > 0 ? (
               <div className='flex gap-2'>
                 {draft.image_urls.map((src) => (
                   <img key={src} src={src} alt='' className='w-20 h-28 object-cover rounded' />
                 ))}
               </div>
+            ) : (
+              <p className='text-xs text-gray-400'>
+                Catalog images aren't added to listings. Add photos of your actual item on the
+                marketplace.
+              </p>
             )}
             <div className='p-4 rounded-xl bg-white/5 border border-white/10'>
               <h4 className='text-sm font-semibold text-white mb-2'>

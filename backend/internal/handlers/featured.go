@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/jamesc159/monmetrics/internal/models"
@@ -51,9 +52,38 @@ func (h *Handlers) GetFeaturedContent(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(featuredContent)
 		return
 	}
+	h.stripHiddenFeaturedImages(ctx, featuredContent)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(featuredContent)
+}
+
+// stripHiddenFeaturedImages blanks carousel art copied from a withheld game's card.
+// Items without a card (news, sponsored) carry their own art and are left alone.
+func (h *Handlers) stripHiddenFeaturedImages(ctx context.Context, items []models.FeaturedContent) {
+	if h.config == nil || len(h.config.HiddenImageGames) == 0 {
+		return
+	}
+	ids := make([]primitive.ObjectID, 0, len(items))
+	for _, item := range items {
+		if item.CardID != nil {
+			ids = append(ids, *item.CardID)
+		}
+	}
+	cards, err := h.cardsByID(ctx, ids)
+	if err != nil {
+		fmt.Printf("Error checking featured card games: %v\n", err)
+	}
+	for i := range items {
+		if items[i].CardID == nil {
+			continue
+		}
+		// Fail closed: if the lookup failed, withhold every card-linked image.
+		card, ok := cards[*items[i].CardID]
+		if err != nil || (ok && h.imageHidden(card.Game)) {
+			items[i].ImageURL = ""
+		}
+	}
 }
 
 // GetCardsByGame retrieves cards organized by game with popularity sorting
@@ -188,6 +218,7 @@ func (h *Handlers) topCardsForGame(ctx context.Context, game, category string) (
 		if err := cursor.All(ctx, &out); err != nil {
 			return nil, err
 		}
+		h.stripHiddenImages(out)
 		return out, nil
 	}
 

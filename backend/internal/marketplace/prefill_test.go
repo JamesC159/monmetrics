@@ -79,6 +79,30 @@ func TestBuildDraftGradedEbay(t *testing.T) {
 	}
 }
 
+func TestBuildDraftSkipsCatalogImage(t *testing.T) {
+	cardID := primitive.NewObjectID()
+	view := &models.PortfolioItemView{
+		PortfolioItem: models.PortfolioItem{
+			ID:       primitive.NewObjectID(),
+			CardID:   &cardID,
+			ItemType: models.ItemTypeRawCard,
+			Quantity: 1,
+		},
+		Card:            &models.Card{ImageURL: "https://product-images.tcgplayer.com/1.jpg"},
+		DisplayName:     "Black Lotus",
+		DisplayImageURL: "https://product-images.tcgplayer.com/1.jpg",
+	}
+	if d := BuildDraft(models.ProviderEbay, view, models.CompsStats{}); len(d.ImageURLs) != 0 {
+		t.Fatalf("catalog image must not be prefilled, got %v", d.ImageURLs)
+	}
+
+	view.CustomImageURL = "https://example.com/my-card.jpg"
+	d := BuildDraft(models.ProviderEbay, view, models.CompsStats{})
+	if len(d.ImageURLs) != 1 || d.ImageURLs[0] != view.CustomImageURL {
+		t.Fatalf("seller photo should be prefilled, got %v", d.ImageURLs)
+	}
+}
+
 func TestMockExchangeCode(t *testing.T) {
 	p := newMockProvider(models.ProviderEbay, "eBay", "http://localhost:8080")
 	if _, _, err := p.ExchangeCode(context.Background(), "bogus"); err == nil {

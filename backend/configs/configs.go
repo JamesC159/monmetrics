@@ -48,6 +48,9 @@ type Config struct {
 	// substrings: seeded cards say "Magic The Gathering", catalog cards say "Magic: The
 	// Gathering". Empty exposes every game.
 	EnabledGames []string
+	// HiddenImageGames withholds card images for these games (matched like EnabledGames)
+	// while keeping their prices, so a publisher's art can be pulled on request.
+	HiddenImageGames []string
 	// AdminEmails gates /api/admin. Privilege comes from server config, never from the
 	// request, so revoking an admin takes effect on restart rather than at token expiry.
 	AdminEmails  []string
@@ -146,6 +149,7 @@ func Load() *Config {
 
 	// Set ENABLED_GAMES="" to expose every game again.
 	config.EnabledGames = parseStringList(getEnv("ENABLED_GAMES", "Magic"))
+	config.HiddenImageGames = parseStringList(os.Getenv("HIDDEN_IMAGE_GAMES"))
 	config.AdminEmails = normalizeEmails(parseStringList(os.Getenv("ADMIN_EMAILS")))
 
 	config.SMTPHost = os.Getenv("SMTP_HOST")

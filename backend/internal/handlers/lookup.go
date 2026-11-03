@@ -25,6 +25,7 @@ func (h *Handlers) cardsByID(ctx context.Context, ids []primitive.ObjectID) (map
 	if err := cur.All(ctx, &cards); err != nil {
 		return nil, err
 	}
+	h.stripHiddenImages(cards)
 	for i := range cards {
 		out[cards[i].ID] = &cards[i]
 	}

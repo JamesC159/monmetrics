@@ -7,6 +7,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson/primitive"
 
 	"github.com/jamesc159/monmetrics/configs"
+	"github.com/jamesc159/monmetrics/internal/models"
 )
 
 func TestBuildSearchFilterAppliesCatalogFilters(t *testing.T) {
@@ -97,5 +98,32 @@ func TestApplyEnabledGamesOverridesCallerGameFilter(t *testing.T) {
 	// and a Pokemon query under a Magic-only deployment correctly returns nothing.
 	if _, ok := clauses[0]["game"]; !ok {
 		t.Fatalf("caller game filter should be preserved, got %v", clauses[0])
+	}
+}
+
+func TestStripHiddenImagesMatchesLikeEnabledGames(t *testing.T) {
+	h := &Handlers{config: &configs.Config{HiddenImageGames: []string{"pokemon"}}}
+	cards := []models.Card{
+		{Game: "Pokemon", ImageURL: "https://example.com/pikachu.jpg"},
+		{Game: "Pokemon Japan", ImageURL: "https://example.com/pikachu-jp.jpg"},
+		{Game: "Magic: The Gathering", ImageURL: "https://example.com/lotus.jpg"},
+	}
+	h.stripHiddenImages(cards)
+
+	if cards[0].ImageURL != "" || cards[1].ImageURL != "" {
+		t.Fatalf("hidden game images should be blank, got %q and %q", cards[0].ImageURL, cards[1].ImageURL)
+	}
+	if cards[2].ImageURL == "" {
+		t.Fatal("other games should keep their images")
+	}
+}
+
+func TestStripHiddenImagesIsInertWhenUnset(t *testing.T) {
+	for _, h := range []*Handlers{{}, {config: &configs.Config{}}} {
+		cards := []models.Card{{Game: "Pokemon", ImageURL: "https://example.com/pikachu.jpg"}}
+		h.stripHiddenImages(cards)
+		if cards[0].ImageURL == "" {
+			t.Fatal("no hidden games should leave images untouched")
+		}
 	}
 }

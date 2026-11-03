@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react'
 import type { Card } from '../types'
+import { PLACEHOLDER_IMAGE } from '../utils/portfolio'
 import FavoriteButton from './FavoriteButton'
 import PrintingList from './card/PrintingList'
 
@@ -60,12 +61,11 @@ export default function CardGrid({ cards, columns = 6, showAllDetails = true }: 
         >
           <div className='aspect-[3/4] relative overflow-hidden'>
             <img
-              src={card.image_url}
+              src={card.image_url || PLACEHOLDER_IMAGE}
               alt={card.name}
               className='w-full h-full object-cover group-hover:scale-105 transition-transform duration-300'
               onError={(e) => {
-                ;(e.target as HTMLImageElement).src =
-                  'https://via.placeholder.com/300x400/374151/9CA3AF?text=No+Image'
+                ;(e.target as HTMLImageElement).src = PLACEHOLDER_IMAGE
               }}
             />
             <div className='absolute top-2 left-2'>

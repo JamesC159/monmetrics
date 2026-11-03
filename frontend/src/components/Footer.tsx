@@ -163,6 +163,34 @@ export const Footer = () => {
 
         <div className='divider my-8'></div>
 
+        <div className='space-y-2 mb-6 text-xs text-gray-500'>
+          <p>
+            MonMetrics is an independent price-tracking tool. It is not affiliated with, endorsed
+            by, or sponsored by any trading card game publisher or TCGplayer. Card names, images
+            and related marks are trademarks and/or copyrights of their respective owners and are
+            shown for identification only.
+          </p>
+          <p>
+            Pricing data from TCGplayer via{' '}
+            <a
+              href='https://tcgcsv.com'
+              target='_blank'
+              rel='noopener noreferrer'
+              className='underline hover:text-primary-400 transition-colors'
+            >
+              TCGCSV
+            </a>
+            . Rights holders with a concern can reach us at{' '}
+            <a
+              href='mailto:contact@monmetrics.com'
+              className='underline hover:text-primary-400 transition-colors'
+            >
+              contact@monmetrics.com
+            </a>
+            .
+          </p>
+        </div>
+
         <div className='flex flex-col md:flex-row justify-between items-center text-sm text-gray-400'>
           <p>&copy; {currentYear} MonMetrics. All rights reserved.</p>
           <p className='mt-2 md:mt-0'>
