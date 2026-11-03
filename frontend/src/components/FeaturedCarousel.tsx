@@ -84,17 +84,26 @@ export default function FeaturedCarousel({
   return (
     <div className='relative glass-effect rounded-2xl overflow-hidden'>
       <div className='relative h-96 md:h-[450px]'>
+        {/* Blurred backdrop fills the frame around the full image */}
+        <img
+          src={currentItem.image_url}
+          alt=''
+          aria-hidden='true'
+          className='absolute inset-0 w-full h-full object-cover scale-110 blur-2xl opacity-60'
+        />
+
         <img
           src={currentItem.image_url}
           alt={currentItem.title}
-          className='w-full h-full object-cover'
+          className='absolute inset-0 w-full h-full object-contain'
           onError={(e) => {
             ;(e.target as HTMLImageElement).src =
               'https://via.placeholder.com/1200x450/374151/9CA3AF?text=Featured+Content'
           }}
         />
 
-        <div className='absolute inset-0 bg-black/60' />
+        <div className='absolute inset-0 bg-black/40' />
+        <div className='absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent' />
 
         {/* Content */}
         <div className='absolute inset-0 flex flex-col justify-end p-8'>

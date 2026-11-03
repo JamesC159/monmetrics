@@ -12,24 +12,28 @@ import {
 } from 'lucide-react'
 import { apiClient } from '../utils/api'
 import { useAuth } from '../context/AuthContext'
+import { useFeatures } from '../context/FeaturesContext'
 import { useToast } from '../context/ToastContext'
+import { isGradedSeries } from '../utils/grades'
 import PriceChart from '../components/chart/PriceChart'
 import IndicatorPanel from '../components/chart/IndicatorPanel'
 import SaveChartModal from '../components/chart/SaveChartModal'
 import AlertModal from '../components/chart/AlertModal'
 import AlertList from '../components/alerts/AlertList'
+import RecentSalesTable from '../components/card/RecentSalesTable'
+import PriceSummaryStats from '../components/card/PriceSummaryStats'
 import FavoriteButton from '../components/FavoriteButton'
 import { useAlerts } from '../hooks/useAlerts'
 import { readPendingAutosave, useAutosaveChart } from '../hooks/useAutosaveChart'
 import type {
   Card,
+  CardGradeInfo,
   ChartDrawing,
   ChartIndicator,
   ChartSource,
   ChartTimeRange,
   ChartType,
   PriceAlert,
-  PriceHistory,
   SavedChart,
   SavedChartRequest,
 } from '../types'
@@ -50,16 +54,18 @@ export default function CardDetail() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { isEnabled } = useFeatures()
   const { addToast } = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
   const chartParam = searchParams.get('chart')
 
   const [card, setCard] = useState<Card | null>(null)
-  const [priceHistory, setPriceHistory] = useState<PriceHistory | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [timeRange, setTimeRange] = useState<ChartTimeRange>('30d')
   const [selectedSource, setSelectedSource] = useState<ChartSource>('all')
+  const [grade, setGrade] = useState('raw')
+  const [availableGrades, setAvailableGrades] = useState<CardGradeInfo[]>([])
   const [indicators, setIndicators] = useState<ChartIndicator[]>([])
   const [showIndicators, setShowIndicators] = useState(false)
   const [loadedChart, setLoadedChart] = useState<SavedChart | null>(null)
@@ -131,6 +137,26 @@ export default function CardDetail() {
 
     loadCard()
   }, [id, navigate])
+
+  // Series are whatever the card actually has price points for - TCGplayer printings or
+  // eBay grades. The API sorts the default-worthy one first.
+  useEffect(() => {
+    if (!id) return
+    let cancelled = false
+    const showGraded = isEnabled('ebay.grades')
+    apiClient
+      .getCardGrades(id)
+      .then((series) => {
+        if (cancelled) return
+        const visible = showGraded ? series : series.filter((s) => !isGradedSeries(s.grade))
+        setAvailableGrades(visible)
+        if (visible.length) setGrade(visible[0].grade)
+      })
+      .catch(() => !cancelled && setAvailableGrades([]))
+    return () => {
+      cancelled = true
+    }
+  }, [id, isEnabled])
 
   // Apply a saved chart's configuration when opened via ?chart=<id>
   useEffect(() => {
@@ -391,34 +417,57 @@ export default function CardDetail() {
             {/* Current Pricing */}
             <div className='glass-effect rounded-2xl p-6'>
               <h3 className='text-lg font-semibold text-white mb-4'>Current Market Price</h3>
-              <div className='text-center mb-6'>
-                <div className='text-3xl font-bold text-green-400 mb-2'>
-                  {formatPrice(card.current_price)}
-                </div>
-                <div className='text-gray-400 text-sm'>
-                  Last updated {formatDate(card.updated_at)}
-                </div>
-              </div>
-
-              <div className='grid grid-cols-2 gap-4'>
-                <div className='text-center p-4 bg-green-600/20 rounded-lg'>
-                  <TrendingUp className='w-6 h-6 text-green-400 mx-auto mb-2' />
-                  <div className='text-sm text-gray-400 mb-1'>All-Time High</div>
-                  <div className='text-lg font-semibold text-green-400'>
-                    {formatPrice(card.all_time_high)}
+              {card.ebay_synced_at ? (
+                <>
+                  <div className='text-center mb-6'>
+                    <div className='text-3xl font-bold text-green-400 mb-2'>
+                      {formatPrice(card.current_price)}
+                    </div>
+                    <div className='text-gray-400 text-sm'>
+                      eBay sales updated {formatDateTime(card.ebay_synced_at)}
+                    </div>
                   </div>
-                  <div className='text-xs text-gray-500 mt-1'>{formatDate(card.ath_date)}</div>
-                </div>
 
-                <div className='text-center p-4 bg-red-600/20 rounded-lg'>
-                  <TrendingDown className='w-6 h-6 text-red-400 mx-auto mb-2' />
-                  <div className='text-sm text-gray-400 mb-1'>All-Time Low</div>
-                  <div className='text-lg font-semibold text-red-400'>
-                    {formatPrice(card.all_time_low)}
+                  <div className='grid grid-cols-2 gap-4'>
+                    <div className='text-center p-4 bg-green-600/20 rounded-lg'>
+                      <TrendingUp className='w-6 h-6 text-green-400 mx-auto mb-2' />
+                      <div className='text-sm text-gray-400 mb-1'>All-Time High</div>
+                      <div className='text-lg font-semibold text-green-400'>
+                        {formatPrice(card.all_time_high)}
+                      </div>
+                      <div className='text-xs text-gray-500 mt-1'>{formatDate(card.ath_date)}</div>
+                    </div>
+
+                    <div className='text-center p-4 bg-red-600/20 rounded-lg'>
+                      <TrendingDown className='w-6 h-6 text-red-400 mx-auto mb-2' />
+                      <div className='text-sm text-gray-400 mb-1'>All-Time Low</div>
+                      <div className='text-lg font-semibold text-red-400'>
+                        {formatPrice(card.all_time_low)}
+                      </div>
+                      <div className='text-xs text-gray-500 mt-1'>{formatDate(card.atl_date)}</div>
+                    </div>
                   </div>
-                  <div className='text-xs text-gray-500 mt-1'>{formatDate(card.atl_date)}</div>
+                </>
+              ) : (
+                <div className='text-center py-4'>
+                  <Store className='w-10 h-10 text-gray-600 mx-auto mb-3' />
+                  <div className='text-gray-300 mb-1'>No sales data yet</div>
+                  <div className='text-gray-500 text-sm'>
+                    This product is in the catalog and queued for eBay price collection.
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {card.product_url && (
+                <a
+                  href={card.product_url}
+                  target='_blank'
+                  rel='noopener noreferrer'
+                  className='block text-center text-sm text-primary-400 hover:text-primary-300 mt-4'
+                >
+                  View on TCGplayer
+                </a>
+              )}
             </div>
 
             {/* Tags */}
@@ -448,8 +497,10 @@ export default function CardDetail() {
               onTimeRangeChange={setTimeRange}
               source={selectedSource}
               onSourceChange={setSelectedSource}
+              grade={grade}
+              onGradeChange={availableGrades.length > 1 ? setGrade : undefined}
+              availableGrades={availableGrades}
               indicators={indicators}
-              onHistory={setPriceHistory}
               chartType={chartType}
               onChartTypeChange={setChartType}
               showVolume={showVolume}
@@ -504,75 +555,11 @@ export default function CardDetail() {
               )}
             </PriceChart>
 
-            {/* Current Listings */}
-            <div className='glass-effect rounded-2xl p-6'>
-              <div className='flex items-center justify-between mb-6'>
-                <h3 className='text-lg font-semibold text-white'>Current Listings</h3>
-                <span className='text-gray-400 text-sm'>
-                  {priceHistory?.listings?.length || 0} active listings
-                </span>
-              </div>
+            {isEnabled('price.summary_windows') && (
+              <PriceSummaryStats cardId={card.id} grade={grade} />
+            )}
 
-              {priceHistory?.listings && priceHistory.listings.length > 0 ? (
-                <div className='space-y-4'>
-                  {priceHistory.listings.slice(0, 5).map((listing) => (
-                    <div
-                      key={listing.id}
-                      className='flex items-center gap-4 p-4 bg-white/5 rounded-lg hover:bg-white/10 transition-colors'
-                    >
-                      {listing.image_url && (
-                        <img
-                          src={listing.image_url}
-                          alt={listing.title}
-                          className='w-16 h-20 object-cover rounded'
-                          onError={(e) => {
-                            ;(e.target as HTMLImageElement).style.display = 'none'
-                          }}
-                        />
-                      )}
-
-                      <div className='flex-1'>
-                        <h4 className='font-medium text-white mb-1'>{listing.title}</h4>
-                        <div className='flex items-center gap-4 text-sm text-gray-400'>
-                          <span className='flex items-center'>
-                            <Store className='w-4 h-4 mr-1' />
-                            {listing.seller}
-                          </span>
-                          <span>Condition: {listing.condition}</span>
-                          <span>Qty: {listing.quantity}</span>
-                          <span className='capitalize'>{listing.source}</span>
-                        </div>
-                      </div>
-
-                      <div className='text-right'>
-                        <div className='text-xl font-bold text-green-400'>
-                          {formatPrice(listing.price)}
-                        </div>
-                        <div className='text-xs text-gray-500'>
-                          {formatDateTime(listing.created_at)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-
-                  {priceHistory.listings.length > 5 && (
-                    <div className='text-center pt-4 border-t border-white/10'>
-                      <span className='text-gray-400 text-sm'>
-                        +{priceHistory.listings.length - 5} more listings available
-                      </span>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <div className='text-center py-8'>
-                  <Store className='w-12 h-12 text-gray-600 mx-auto mb-3' />
-                  <div className='text-gray-400 mb-2'>No Current Listings</div>
-                  <div className='text-gray-500 text-sm'>
-                    Check back later for marketplace activity
-                  </div>
-                </div>
-              )}
-            </div>
+            {isEnabled('ebay.sold_listings') && <RecentSalesTable cardId={card.id} grade={grade} />}
           </div>
         </div>
       </div>

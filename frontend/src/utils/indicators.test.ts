@@ -86,6 +86,21 @@ describe('aggregateDaily', () => {
     expect(day).toMatchObject({ open: 10, close: 30, high: 40, low: 10, price: 26.67, volume: 3 })
     expect(day.timestamp).toBe(Date.UTC(2025, 0, 1))
   })
+
+  it('weights daily averages by sale volume and sums volume', () => {
+    const at = (hour: number, price: number, volume: number): PricePoint => ({
+      id: String(hour),
+      card_id: 'c',
+      price,
+      volume,
+      source: 'ebay',
+      timestamp: new Date(Date.UTC(2025, 0, 1, hour)).toISOString(),
+      created_at: '',
+    })
+    const [day] = aggregateDaily([at(2, 10, 2), at(20, 20, 1)], 'all')
+    expect(day.price).toBeCloseTo(13.33, 2)
+    expect(day.volume).toBe(3)
+  })
 })
 
 describe('calculateEMA', () => {

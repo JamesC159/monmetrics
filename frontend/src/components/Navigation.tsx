@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Menu, X, Search, User, LogOut, Home, BarChart3, Sparkles } from 'lucide-react'
+import { Menu, X, Search, User, LogOut, BarChart3, Sparkles } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import NotificationBell from '@/components/NotificationBell'
 
@@ -12,6 +12,9 @@ export const Navigation = () => {
 
   const isActive = (path: string) => location.pathname === path
 
+  // Signed-in users treat the dashboard as their home page
+  const homePath = isAuthenticated ? '/dashboard' : '/'
+
   const handleLogout = () => {
     logout()
     navigate('/')
@@ -22,37 +25,13 @@ export const Navigation = () => {
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'>
         <div className='flex justify-between items-center h-16'>
           {/* Logo */}
-          <Link to='/' className='flex items-center group'>
+          <Link to={homePath} className='flex items-center group'>
             <Sparkles className='w-6 h-6 text-primary-400 mr-2 group-hover:animate-pulse' />
             <h1 className='text-2xl font-display font-bold text-primary-200'>MonMetrics</h1>
           </Link>
 
           {/* Desktop Navigation */}
           <div className='hidden md:flex items-center space-x-1'>
-            <Link
-              to='/'
-              className={`flex items-center px-4 py-2 rounded-lg transition-all duration-200 ${
-                isActive('/')
-                  ? 'bg-primary-500/20 text-primary-400'
-                  : 'text-gray-300 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Home className='w-4 h-4 mr-2' />
-              Home
-            </Link>
-
-            <Link
-              to='/search'
-              className={`flex items-center px-4 py-2 rounded-lg transition-all duration-200 ${
-                isActive('/search')
-                  ? 'bg-secondary-500/20 text-secondary-400'
-                  : 'text-gray-300 hover:text-white hover:bg-white/5'
-              }`}
-            >
-              <Search className='w-4 h-4 mr-2' />
-              Search
-            </Link>
-
             {isAuthenticated && (
               <Link
                 to='/dashboard'
@@ -70,6 +49,18 @@ export const Navigation = () => {
 
           {/* Auth Buttons */}
           <div className='hidden md:flex items-center space-x-4'>
+            <Link
+              to='/search'
+              className={`flex items-center px-4 py-2 rounded-lg transition-all duration-200 ${
+                isActive('/search')
+                  ? 'bg-secondary-500/20 text-secondary-400'
+                  : 'text-gray-300 hover:text-white hover:bg-white/5'
+              }`}
+            >
+              <Search className='w-4 h-4 mr-2' />
+              Search
+            </Link>
+
             {isAuthenticated ? (
               <div className='flex items-center space-x-4'>
                 <div className='flex items-center px-4 py-2 bg-white/5 rounded-lg border border-primary-500/30'>
@@ -119,19 +110,6 @@ export const Navigation = () => {
       {isMenuOpen && (
         <div className='md:hidden bg-dark-900/95 backdrop-blur-lg border-t border-white/10 animate-slide-down'>
           <div className='px-4 py-4 space-y-2'>
-            <Link
-              to='/'
-              onClick={() => setIsMenuOpen(false)}
-              className={`flex items-center px-4 py-3 rounded-lg transition-all ${
-                isActive('/')
-                  ? 'bg-primary-500/20 text-primary-400'
-                  : 'text-gray-300 hover:bg-white/5'
-              }`}
-            >
-              <Home className='w-4 h-4 mr-3' />
-              Home
-            </Link>
-
             <Link
               to='/search'
               onClick={() => setIsMenuOpen(false)}

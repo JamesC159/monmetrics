@@ -15,6 +15,7 @@ import type {
   UTCTimestamp,
 } from 'lightweight-charts'
 import type {
+  CardGradeInfo,
   ChartDrawing,
   ChartIndicator,
   ChartSource,
@@ -26,6 +27,7 @@ import type {
 } from '@/types'
 import { apiClient } from '@/utils/api'
 import { formatPrice } from '@/utils/formatters'
+import { gradeLabel } from '@/utils/grades'
 import {
   buildChartSeries,
   indicatorLabel,
@@ -74,6 +76,11 @@ interface PriceChartProps {
   onChartTypeChange?: (type: ChartType) => void
   showVolume?: boolean
   onShowVolumeChange?: (show: boolean) => void
+  /** Grade series to plot; the backend stores a separate series per grade. */
+  grade?: string
+  onGradeChange?: (grade: string) => void
+  /** Only grades with scraped data; providing them renders the grade selector. */
+  availableGrades?: CardGradeInfo[]
   /** Providing onDrawingsChange enables the drawing toolbar. */
   drawings?: ChartDrawing[]
   onDrawingsChange?: (drawings: ChartDrawing[]) => void
@@ -114,6 +121,9 @@ export default function PriceChart({
   onChartTypeChange,
   showVolume = false,
   onShowVolumeChange,
+  grade = 'raw',
+  onGradeChange,
+  availableGrades,
   drawings,
   onDrawingsChange,
   alerts,
@@ -128,7 +138,7 @@ export default function PriceChart({
     let cancelled = false
     setLoading(true)
     apiClient
-      .getCardPrices(cardId, timeRange, warmup)
+      .getCardPrices(cardId, timeRange, warmup, grade)
       .then((data) => {
         if (cancelled) return
         setHistory(data)
@@ -145,7 +155,7 @@ export default function PriceChart({
       cancelled = true
     }
     // onHistory is intentionally excluded so parents need not memoize it
-  }, [cardId, timeRange, warmup])
+  }, [cardId, timeRange, warmup, grade])
 
   const data = useMemo(
     () => buildChartSeries(history?.prices ?? [], source, indicators, history?.visible_from),
@@ -752,6 +762,21 @@ export default function PriceChart({
               Volume
             </label>
           )}
+          {onGradeChange && (
+            <select
+              value={grade}
+              onChange={(e) => onGradeChange(e.target.value)}
+              className='px-3 py-1 bg-white/10 border border-white/20 rounded text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary-500'
+              aria-label='Grade'
+            >
+              {(availableGrades?.length ? availableGrades : [{ grade, sale_count: 0 }]).map((g) => (
+                <option key={g.grade} value={g.grade} className='bg-slate-800'>
+                  {gradeLabel(g.grade)}
+                  {g.sale_count ? ` (${g.sale_count})` : ''}
+                </option>
+              ))}
+            </select>
+          )}
           <select
             value={source}
             onChange={(e) => onSourceChange(e.target.value as ChartSource)}
@@ -876,8 +901,12 @@ export default function PriceChart({
         ) : data.length === 0 ? (
           <div className='absolute inset-0 flex items-center justify-center text-center'>
             <div>
-              <div className='text-gray-400 mb-2'>No price data available</div>
-              <div className='text-gray-500 text-sm'>Try selecting a different time range</div>
+              <div className='text-gray-400 mb-2'>
+                No {gradeLabel(grade).toLowerCase()} sales recorded
+              </div>
+              <div className='text-gray-500 text-sm'>
+                Try a different grade or a wider time range
+              </div>
             </div>
           </div>
         ) : null}

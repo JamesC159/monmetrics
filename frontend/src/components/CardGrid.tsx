@@ -9,6 +9,9 @@ interface CardGridProps {
   showAllDetails?: boolean
 }
 
+// Catalog items exist before the scraper reaches them; $0.00 would read as "worthless".
+const hasPriceData = (card: Card) => card.current_price > 0 || !!card.ebay_synced_at
+
 export default function CardGrid({ cards, columns = 6, showAllDetails = true }: CardGridProps) {
   const formatPrice = (price: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -108,34 +111,40 @@ export default function CardGrid({ cards, columns = 6, showAllDetails = true }: 
             )}
 
             <div className='space-y-2'>
-              <div className='flex items-center justify-between'>
-                <span className='text-gray-400 text-xs'>Price:</span>
-                <span className='text-base font-bold text-green-400'>
-                  {formatPrice(card.current_price)}
-                </span>
-              </div>
+              {hasPriceData(card) ? (
+                <>
+                  <div className='flex items-center justify-between'>
+                    <span className='text-gray-400 text-xs'>Price:</span>
+                    <span className='text-base font-bold text-green-400'>
+                      {formatPrice(card.current_price)}
+                    </span>
+                  </div>
 
-              {showAllDetails && (
-                <div className='grid grid-cols-2 gap-2 text-xs'>
-                  <div className='flex items-center gap-1'>
-                    <TrendingUp className='w-3 h-3 text-green-400' />
-                    <div>
-                      <div className='text-gray-400'>ATH</div>
-                      <div className='text-green-400 font-medium'>
-                        {formatPrice(card.all_time_high)}
+                  {showAllDetails && (
+                    <div className='grid grid-cols-2 gap-2 text-xs'>
+                      <div className='flex items-center gap-1'>
+                        <TrendingUp className='w-3 h-3 text-green-400' />
+                        <div>
+                          <div className='text-gray-400'>ATH</div>
+                          <div className='text-green-400 font-medium'>
+                            {formatPrice(card.all_time_high)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className='flex items-center gap-1'>
+                        <TrendingDown className='w-3 h-3 text-red-400' />
+                        <div>
+                          <div className='text-gray-400'>ATL</div>
+                          <div className='text-red-400 font-medium'>
+                            {formatPrice(card.all_time_low)}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div className='flex items-center gap-1'>
-                    <TrendingDown className='w-3 h-3 text-red-400' />
-                    <div>
-                      <div className='text-gray-400'>ATL</div>
-                      <div className='text-red-400 font-medium'>
-                        {formatPrice(card.all_time_low)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                  )}
+                </>
+              ) : (
+                <div className='text-xs text-gray-500'>No sales data yet</div>
               )}
 
               {showAllDetails && card.tags && card.tags.length > 0 && (

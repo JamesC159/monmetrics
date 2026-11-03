@@ -2,6 +2,7 @@ import type {
   Card,
   SearchResult,
   PriceHistory,
+  PriceSummary,
   SavedChart,
   SavedChartRequest,
   Dashboard,
@@ -160,6 +161,20 @@ class ApiClient {
     return this.request('/api/auth/logout', { method: 'POST' })
   }
 
+  async forgotPassword(email: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    })
+  }
+
+  async resetPassword(token: string, password: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>('/api/auth/reset-password', {
+      method: 'POST',
+      body: JSON.stringify({ token, password }),
+    })
+  }
+
   // Card methods
   async searchCards(params: SearchParams = {}): Promise<SearchResult> {
     const searchParams = new URLSearchParams()
@@ -176,13 +191,81 @@ class ApiClient {
   }
 
   async getCard(id: string): Promise<Card> {
-    return this.request<Card>(`/api/cards/${id}`)
+    return this.request<Card>(`/api/cards/${encodeURIComponent(id)}`)
   }
 
-  async getCardPrices(id: string, range: string = '30d', warmupDays = 0): Promise<PriceHistory> {
+  async getCardPrices(
+    id: string,
+    range: string = '30d',
+    warmupDays = 0,
+    grade = 'raw',
+    source = 'all',
+  ): Promise<PriceHistory> {
     const params = new URLSearchParams({ range })
     if (warmupDays > 0) params.set('warmup_days', String(warmupDays))
+    params.set('grade', grade)
+    params.set('source', source)
     return this.request<PriceHistory>(`/api/cards/${encodeURIComponent(id)}/prices?${params}`)
+  }
+
+  async getPriceSummary(id: string, grade = 'raw', source = 'ebay'): Promise<PriceSummary[]> {
+    const params = new URLSearchParams({ grade, source })
+    return this.request<PriceSummary[]>(
+      `/api/cards/${encodeURIComponent(id)}/price-summary?${params}`,
+    )
+  }
+
+  async getCardSales(
+    id: string,
+    opts: { grade?: string; source?: string; page?: number; limit?: number } = {},
+  ): Promise<import('@/types').CardSalesResponse> {
+    const params = new URLSearchParams({
+      grade: opts.grade ?? 'raw',
+      source: opts.source ?? 'ebay',
+    })
+    if (opts.page && opts.page > 1) params.set('page', String(opts.page))
+    if (opts.limit) params.set('limit', String(opts.limit))
+    return this.request<import('@/types').CardSalesResponse>(
+      `/api/cards/${encodeURIComponent(id)}/sales?${params}`,
+    )
+  }
+
+  async getCardGrades(id: string): Promise<import('@/types').CardGradeInfo[]> {
+    return this.request<import('@/types').CardGradeInfo[]>(
+      `/api/cards/${encodeURIComponent(id)}/grades`,
+    )
+  }
+
+  // Catalog browse
+  async getGames(): Promise<import('@/types').GameSummary[]> {
+    return this.request<import('@/types').GameSummary[]>('/api/games')
+  }
+
+  // Feature flags
+  async getFeatures(): Promise<import('@/types').FeatureFlags> {
+    return this.request<import('@/types').FeatureFlags>('/api/features')
+  }
+
+  async getAdminFeatures(): Promise<import('@/types').FeatureState[]> {
+    return this.request<import('@/types').FeatureState[]>('/api/admin/features')
+  }
+
+  async updateAdminFeature(
+    key: string,
+    enabled: boolean,
+  ): Promise<import('@/types').FeatureState[]> {
+    return this.request<import('@/types').FeatureState[]>(
+      `/api/admin/features/${encodeURIComponent(key)}`,
+      { method: 'PUT', body: JSON.stringify({ enabled }) },
+    )
+  }
+
+  async getSets(game?: string, category?: string): Promise<import('@/types').SetSummary[]> {
+    const params = new URLSearchParams()
+    if (game) params.set('game', game)
+    if (category) params.set('category', category)
+    const qs = params.toString()
+    return this.request<import('@/types').SetSummary[]>(`/api/sets${qs ? `?${qs}` : ''}`)
   }
 
   // Featured content and organized search

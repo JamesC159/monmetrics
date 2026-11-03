@@ -226,18 +226,22 @@ const DAY_MS = 86_400_000
 /** Groups raw price points into one point per UTC day with OHLC, optionally filtered by source. */
 export function aggregateDaily(prices: PricePoint[], source: string): ChartPoint[] {
   const filtered = (source === 'all' ? prices : prices.filter((p) => p.source === source))
-    .map((p) => ({ price: p.price, ts: new Date(p.timestamp).getTime() }))
+    .map((p) => ({ price: p.price, volume: p.volume, ts: new Date(p.timestamp).getTime() }))
     .sort((a, b) => a.ts - b.ts)
-  const byDay = new Map<number, number[]>()
+  const byDay = new Map<number, { price: number; volume: number }[]>()
   for (const p of filtered) {
     const day = Math.floor(p.ts / DAY_MS) * DAY_MS
     const bucket = byDay.get(day)
-    if (bucket) bucket.push(p.price)
-    else byDay.set(day, [p.price])
+    const point = { price: p.price, volume: p.volume && p.volume > 0 ? p.volume : 1 }
+    if (bucket) bucket.push(point)
+    else byDay.set(day, [point])
   }
   return Array.from(byDay.entries())
     .map(([day, dayPrices]) => {
-      const avg = dayPrices.reduce((s, v) => s + v, 0) / dayPrices.length
+      const volume = dayPrices.reduce((sum, point) => sum + point.volume, 0)
+      const weightedSum = dayPrices.reduce((sum, point) => sum + point.price * point.volume, 0)
+      const avg = weightedSum / volume
+      const pricesOnly = dayPrices.map((point) => point.price)
       return {
         date: new Date(day).toLocaleDateString('en-US', {
           month: 'short',
@@ -247,11 +251,11 @@ export function aggregateDaily(prices: PricePoint[], source: string): ChartPoint
         fullDate: new Date(day).toISOString(),
         timestamp: day,
         price: round2(avg),
-        open: round2(dayPrices[0]),
-        close: round2(dayPrices[dayPrices.length - 1]),
-        high: round2(Math.max(...dayPrices)),
-        low: round2(Math.min(...dayPrices)),
-        volume: dayPrices.length,
+        open: round2(dayPrices[0].price),
+        close: round2(dayPrices[dayPrices.length - 1].price),
+        high: round2(Math.max(...pricesOnly)),
+        low: round2(Math.min(...pricesOnly)),
+        volume,
       }
     })
     .sort((a, b) => a.timestamp - b.timestamp)

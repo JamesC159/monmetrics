@@ -32,6 +32,97 @@ export interface Card {
   search_terms: string[]
   tags?: string[]
   popularity_rank?: number // Based on 6-month popularity metrics
+  // Catalog provenance (set by the TCGCSV ingester)
+  catalog_source?: string
+  external_id?: string
+  external_group_id?: string
+  external_category_id?: string
+  product_type?: string
+  language?: string
+  product_url?: string
+  catalog_synced_at?: string
+  active?: boolean
+  // Scrape state: absent ebay_synced_at means no sales have ever been collected
+  ebay_synced_at?: string
+  last_scrape_at?: string
+  last_sale_count?: number
+  scrape_tier?: number
+}
+
+export type FeatureKey =
+  | 'ebay.sold_listings'
+  | 'ebay.grades'
+  | 'price.summary_windows'
+  | 'marketplace.comps'
+  | 'catalog.all_games'
+
+export type FeatureFlags = Partial<Record<FeatureKey, boolean>>
+
+/** A flag plus its definition, for the admin page. */
+export interface FeatureState {
+  key: FeatureKey
+  label: string
+  description: string
+  default: boolean
+  /** What has to exist before this can be switched on. */
+  blocker?: string
+  enabled: boolean
+  updated_at?: string
+  updated_by?: string
+}
+
+export interface GameSummary {
+  game: string
+  card_count: number
+  sealed_count: number
+  priced_count: number
+  image_url: string
+}
+
+export interface SetSummary {
+  set: string
+  game: string
+  external_group_id?: string
+  product_count: number
+  priced_count: number
+  image_url: string
+}
+
+/** A single scraped eBay sale backing the price history. */
+export interface SoldSale {
+  id: string
+  item_id: string
+  card_id: string
+  source: string
+  title: string
+  price: number
+  shipping: number
+  currency: string
+  sold_at: string
+  grade: string
+  best_offer: boolean
+  url: string
+  excluded: boolean
+  exclude_reason?: string
+  scraped_at: string
+}
+
+export interface CardSalesResponse {
+  card_id: string
+  grade: string
+  source: string
+  total: number
+  page: number
+  per_page: number
+  sales: SoldSale[]
+}
+
+export interface CardGradeInfo {
+  grade: string
+  source: string
+  sale_count: number
+  average: number
+  last_sale_at: string
 }
 
 export interface PricePoint {
@@ -40,6 +131,7 @@ export interface PricePoint {
   price: number
   volume?: number
   source: 'ebay' | 'tcgplayer'
+  grade?: string
   timestamp: string
   created_at: string
 }
@@ -153,6 +245,8 @@ export interface ChartIndicator {
 
 export interface MarketData {
   card_id: string
+  source?: string
+  grade?: string
   date: string
   open_price: number
   close_price: number
@@ -160,6 +254,26 @@ export interface MarketData {
   low_price: number
   volume: number
   weighted_avg_price: number
+}
+
+export interface PriceWindowStats {
+  count: number
+  average: number
+  trimmed_mean: number
+  median: number
+  min: number
+  max: number
+  change_pct: number
+  from: string
+  to: string
+}
+
+export interface PriceSummary {
+  card_id: string
+  source: string
+  grade: string
+  updated_at: string
+  windows: Record<ChartTimeRange, PriceWindowStats>
 }
 
 export interface Listing {
@@ -460,10 +574,17 @@ export interface AuthResponse {
   user: User
 }
 
+export type CardSearchSort = 'relevance' | 'price_desc' | 'price_asc' | 'name' | 'recent'
+
 export interface SearchParams {
   q?: string
   game?: string
   category?: string
+  set?: string
+  product_type?: string
+  rarity?: string
+  priced?: boolean
+  sort?: CardSearchSort
   page?: number
   limit?: number
 }
