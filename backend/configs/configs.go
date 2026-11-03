@@ -135,7 +135,7 @@ func Load() *Config {
 
 	config.CatalogEnabled = getEnv("CATALOG_ENABLED", "false") == "true"
 	config.CatalogInterval = parseDuration(getEnv("CATALOG_INTERVAL", "24h"), 24*time.Hour)
-	config.CatalogResumeWindow = parseDuration(getEnv("CATALOG_RESUME_WINDOW", ""), config.CatalogInterval)
+	config.CatalogResumeWindow = parseDuration(getEnv("CATALOG_RESUME_WINDOW", ""), config.CatalogInterval/2)
 	config.CatalogBaseURL = strings.TrimRight(getEnv("CATALOG_BASE_URL", "https://tcgcsv.com"), "/")
 	config.CatalogUserAgent = getEnv("CATALOG_USER_AGENT", config.ScraperUserAgent)
 	config.CatalogRequestDelay = parseDuration(getEnv("CATALOG_REQUEST_DELAY", "150ms"), 150*time.Millisecond)

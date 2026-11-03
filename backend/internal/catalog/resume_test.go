@@ -156,14 +156,34 @@ func TestStoresPricesNeedsCombinedSourceAndSink(t *testing.T) {
 	}
 }
 
-func TestResumeWindowDefaultsToInterval(t *testing.T) {
-	if got := (&Runner{Interval: 6 * time.Hour}).resumeWindow(); got != 6*time.Hour {
-		t.Errorf("resumeWindow = %v, want 6h", got)
+func TestResumeWindowDefaultsToHalfInterval(t *testing.T) {
+	if got := (&Runner{Interval: 6 * time.Hour}).resumeWindow(); got != 3*time.Hour {
+		t.Errorf("resumeWindow = %v, want 3h", got)
 	}
 	if got := (&Runner{Interval: 6 * time.Hour, ResumeWindow: time.Hour}).resumeWindow(); got != time.Hour {
 		t.Errorf("explicit resumeWindow = %v, want 1h", got)
 	}
-	if got := (&Runner{}).resumeWindow(); got != 24*time.Hour {
-		t.Errorf("zero-value resumeWindow = %v, want 24h", got)
+	if got := (&Runner{}).resumeWindow(); got != 12*time.Hour {
+		t.Errorf("zero-value resumeWindow = %v, want 12h", got)
+	}
+}
+
+// A daily run starts one interval after the last one, so the groups it finished are
+// about an interval old. They must not be skipped, or every daily run after the first
+// does nothing.
+func TestDailyRerunReingestsPreviousRunsGroups(t *testing.T) {
+	runner := &Runner{Interval: 24 * time.Hour}
+	now := time.Date(2026, 11, 4, 3, 0, 0, 0, time.UTC)
+	previousRunGroup := now.Add(-24*time.Hour + 5*time.Minute) // finished 5 minutes after yesterday's 03:00 start
+	checkpoints := map[string]time.Time{checkpointKey(3, 1): previousRunGroup}
+
+	if shouldSkipGroup(checkpoints, 3, 1, now.Add(-runner.resumeWindow())) {
+		t.Errorf("group ingested one interval ago should be re-ingested on the daily run")
+	}
+	// A run that died partway and is retried shortly after should still resume past it.
+	retryGroup := now.Add(-time.Hour)
+	checkpoints[checkpointKey(3, 2)] = retryGroup
+	if !shouldSkipGroup(checkpoints, 3, 2, now.Add(-runner.resumeWindow())) {
+		t.Errorf("group ingested an hour ago should be skipped when a retry resumes")
 	}
 }

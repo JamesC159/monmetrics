@@ -32,14 +32,18 @@ type SyncOptions struct {
 	GroupID    int
 }
 
+// resumeWindow is how recently a group must have been ingested to be skipped. It is
+// half the interval, not the whole thing: a run that finished yesterday is about one
+// interval old when the next daily run starts, so a full-interval window would skip
+// every group and the daily sync would never re-ingest anything.
 func (r *Runner) resumeWindow() time.Duration {
 	if r.ResumeWindow > 0 {
 		return r.ResumeWindow
 	}
 	if r.Interval > 0 {
-		return r.Interval
+		return r.Interval / 2
 	}
-	return 24 * time.Hour
+	return 12 * time.Hour
 }
 
 func (r *Runner) Run(ctx context.Context) {
