@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "monmetrics",
+  "project_id": "732166ec-7e3c-4211-bc26-87a6c0e3f277"
+}
