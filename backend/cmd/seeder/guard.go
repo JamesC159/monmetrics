@@ -25,11 +25,11 @@ var hasGrade = bson.M{"grade": bson.M{"$nin": bson.A{nil, ""}}}
 var realDataMarks = []realDataMark{
 	{"catalog-imported cards", "cards", bson.M{"catalog_source": bson.M{"$exists": true}}, "make catalog-sync"},
 	{"catalog sync checkpoints", "catalog_sync_state", bson.M{}, "make catalog-sync"},
-	{"TCGCSV-priced cards", "cards", bson.M{"market_price_synced_at": bson.M{"$exists": true}}, "make prices"},
+	{"TCGCSV-priced cards", "cards", bson.M{"market_price_synced_at": bson.M{"$exists": true}}, "make catalog-sync or make prices"},
 	{"scrape-scheduled cards", "cards", bson.M{"last_scrape_at": bson.M{"$exists": true}}, "make scrape"},
 	{"eBay-synced cards", "cards", bson.M{"ebay_synced_at": bson.M{"$exists": true}}, "make scrape"},
-	{"graded price rows", "prices", hasGrade, "make prices or make scrape"},
-	{"graded market data", "market_data", hasGrade, "make prices or make scrape"},
+	{"graded price rows", "prices", hasGrade, "make catalog-sync, make prices or make scrape"},
+	{"graded market data", "market_data", hasGrade, "make catalog-sync, make prices or make scrape"},
 	{"sold listings", "sold_listings", bson.M{}, "make scrape"},
 	{"price summaries", "price_summaries", bson.M{}, "make scrape"},
 }

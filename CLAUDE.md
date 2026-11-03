@@ -99,8 +99,8 @@ cd frontend && npm run build   # client bundle + SSR bundle (dist/server)
 - Run the gate for every area you touched before closing a bead.
 - `npm run lint` fails today because the repo has no ESLint config. That isn't a regression.
 - Data jobs call live third-party services. Run them only when the task needs them:
-  - `make catalog-sync ARGS="--group 3170 --dry-run"` imports the TCGCSV catalog. `make catalog-demo` ingests one set end to end.
-  - `make prices ARGS="-max-groups 3 -dry-run"` fetches daily TCGplayer prices. Run it at most once a day: TCGCSV bans clients over 10k requests per 24h, and price files must not be re-fetched within 24h.
+  - `make catalog-sync ARGS="--group 3170 --dry-run"` imports the TCGCSV catalog and that day's prices, reading one `ProductsAndPrices.csv` per group. `make catalog-demo` ingests one set end to end.
+  - `make prices ARGS="-max-groups 3 -dry-run"` fetches daily TCGplayer prices on their own. Catalog sync already stores them, so run this only on a day catalog sync didn't, and at most once a day: TCGCSV bans clients over 10k requests per 24h, and price files must not be re-fetched within 24h.
   - `make scrape` pulls eBay sold listings and currently gets 403s. `go run ./cmd/scraper -fixture <page.html>` parses a saved page without touching eBay.
   - `make seed` replaces the catalog with sample cards, 5 years of synthetic price history and a test user. Read the rule below first.
 
@@ -123,7 +123,7 @@ backend/                         module github.com/jamesc159/monmetrics (net/htt
   internal/middleware/           Chain, CORS, SecurityHeaders, RateLimit, RequestLogger, AuthRequired (hand-rolled HS256 JWT), AdminRequired
   internal/models/               Mongo documents and API request/response structs, one file per domain
   internal/database/             Mongo connection; every index is declared in createIndexes
-  internal/catalog/              TCGCSV category -> group -> product ingest, checkpoints, NormalizeProduct, BuildSearchTerms
+  internal/catalog/              TCGCSV category -> group -> ProductsAndPrices.csv ingest, checkpoints, NormalizeProduct, BuildSearchTerms; prices go to a PriceSink
   internal/pricing/              daily price snapshots -> prices (one row per card/printing/day; a rerun overwrites that day)
   internal/scraper/              eBay sold-listing source, relevance and grade classification, tiered scheduler, daily aggregates
   internal/alerts/               alert rules (thresholds, EMA) and the background Evaluator -> notifications + email
@@ -151,8 +151,8 @@ frontend/                        React 19 + TypeScript, Vite 8, Tailwind 3, reac
 
 **Data flow.**
 
-- Catalog ingest upserts `cards`, which are unique on `catalog_source` + `external_id`.
-- Price ingest writes daily rows to `prices` (source `tcgplayer`, one series per printing).
+- Catalog ingest upserts `cards`, which are unique on `catalog_source` + `external_id`, then passes the group's prices to `pricing` (its `PriceSink`).
+- Price ingest, from catalog sync or `make prices`, writes daily rows to `prices` (source `tcgplayer`, one series per printing).
 - The scraper writes `sold_listings` and `price_summaries`.
 - The alert evaluator reads `prices` and writes `notifications`, plus email.
 

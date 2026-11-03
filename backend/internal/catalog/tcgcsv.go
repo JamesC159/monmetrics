@@ -1,13 +1,16 @@
 package catalog
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/rand"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -68,6 +71,127 @@ func (s *TCGCSVSource) Prices(ctx context.Context, categoryID, groupID int) ([]P
 	return fetchList[ProductPrice](ctx, s, fmt.Sprintf("/tcgplayer/%d/%d/prices", categoryID, groupID))
 }
 
+// ProductsAndPrices reads a group's products and prices from its one CSV file, half the
+// requests of fetching the products and prices JSON separately.
+func (s *TCGCSVSource) ProductsAndPrices(ctx context.Context, categoryID, groupID int) ([]Product, []ProductPrice, error) {
+	path := fmt.Sprintf("/tcgplayer/%d/%d/ProductsAndPrices.csv", categoryID, groupID)
+	body, err := s.get(ctx, path)
+	if err != nil {
+		return nil, nil, err
+	}
+	products, prices, err := parseProductsAndPrices(bytes.NewReader(body))
+	if err != nil {
+		return nil, nil, fmt.Errorf("decode %s: %w", path, err)
+	}
+	return products, prices, nil
+}
+
+// tcgplayerProductURL replaces the CSV's url column, which is a TCGCSV short link rather
+// than the product page. TCGplayer resolves the id without the slug.
+const tcgplayerProductURL = "https://www.tcgplayer.com/product/%d"
+
+// parseProductsAndPrices reads ProductsAndPrices.csv: one row per product and printing,
+// with extendedData flattened into ext<Name> columns whose set varies by game. A product
+// with no prices yet has a single row with an empty subTypeName.
+func parseProductsAndPrices(r io.Reader) ([]Product, []ProductPrice, error) {
+	reader := csv.NewReader(r)
+	header, err := reader.Read()
+	if errors.Is(err, io.EOF) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	column := make(map[string]int, len(header))
+	var extColumns []string
+	for i, name := range header {
+		column[name] = i
+		if strings.HasPrefix(name, "ext") {
+			extColumns = append(extColumns, name)
+		}
+	}
+	for _, name := range []string{"productId", "name", "subTypeName"} {
+		if _, ok := column[name]; !ok {
+			return nil, nil, fmt.Errorf("missing %s column", name)
+		}
+	}
+
+	var products []Product
+	var prices []ProductPrice
+	seen := map[int]bool{}
+	for {
+		record, err := reader.Read()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		field := func(name string) string {
+			if i, ok := column[name]; ok {
+				return strings.TrimSpace(record[i])
+			}
+			return ""
+		}
+		line, _ := reader.FieldPos(0)
+		productID, err := strconv.Atoi(field("productId"))
+		if err != nil {
+			return nil, nil, fmt.Errorf("line %d: productId: %w", line, err)
+		}
+
+		if !seen[productID] {
+			seen[productID] = true
+			categoryID, _ := strconv.Atoi(field("categoryId"))
+			groupID, _ := strconv.Atoi(field("groupId"))
+			product := Product{
+				ProductID:  productID,
+				CategoryID: categoryID,
+				GroupID:    groupID,
+				Name:       field("name"),
+				CleanName:  field("cleanName"),
+				ImageURL:   field("imageUrl"),
+				URL:        fmt.Sprintf(tcgplayerProductURL, productID),
+				ModifiedOn: field("modifiedOn"),
+			}
+			for _, name := range extColumns {
+				if value := field(name); value != "" {
+					product.ExtendedData = append(product.ExtendedData,
+						ExtendedField{Name: strings.TrimPrefix(name, "ext"), Value: value})
+				}
+			}
+			products = append(products, product)
+		}
+
+		subType := field("subTypeName")
+		if subType == "" {
+			continue
+		}
+		price := ProductPrice{ProductID: productID, SubTypeName: subType}
+		for _, target := range []struct {
+			name string
+			dest **float64
+		}{
+			{"lowPrice", &price.LowPrice},
+			{"midPrice", &price.MidPrice},
+			{"highPrice", &price.HighPrice},
+			{"marketPrice", &price.MarketPrice},
+			{"directLowPrice", &price.DirectLowPrice},
+		} {
+			raw := field(target.name)
+			if raw == "" {
+				continue // null in the JSON feed
+			}
+			value, err := strconv.ParseFloat(raw, 64)
+			if err != nil {
+				return nil, nil, fmt.Errorf("line %d: %s: %w", line, target.name, err)
+			}
+			*target.dest = &value
+		}
+		prices = append(prices, price)
+	}
+	return products, prices, nil
+}
+
 // LastUpdated reports when the mirror last refreshed, so cycles can be skipped.
 func (s *TCGCSVSource) LastUpdated(ctx context.Context) (time.Time, error) {
 	body, err := s.get(ctx, "/last-updated.txt")
@@ -113,7 +237,7 @@ func (s *TCGCSVSource) get(ctx context.Context, path string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("User-Agent", s.UserAgent)
-	req.Header.Set("Accept", "application/json,text/plain")
+	req.Header.Set("Accept", "application/json,text/csv,text/plain")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err

@@ -15,8 +15,8 @@ help:
 	@echo "  make install-tools - Install dev tools (air live reload)"
 	@echo "  make setup       - Initial project setup with .env files"
 	@echo "  make seed        - Populate database with sample data"
-	@echo "  make catalog-sync - Import the TCGCSV product catalog"
-	@echo "  make prices      - Ingest live TCGplayer prices via TCGCSV"
+	@echo "  make catalog-sync - Import the TCGCSV product catalog and today's prices"
+	@echo "  make prices      - Ingest prices only (catalog-sync already does)"
 	@echo "  make scrape      - Scrape eBay sold listings for all cards"
 	@echo "  make full-setup  - Complete setup (install + setup + seed)"
 	@echo ""
@@ -172,13 +172,16 @@ seed:
 scrape:
 	cd backend && go run ./cmd/scraper -all
 
-# Import the automated product catalog (all trading card categories by default).
+# Import the automated product catalog and today's prices (all trading card categories
+# by default). Each group is one ProductsAndPrices.csv request, so a daily run needs no
+# separate `make prices`; groups synced within CATALOG_RESUME_WINDOW are skipped.
 # Narrow a run with: make catalog-sync ARGS="--category 3 --limit 500 --dry-run"
 catalog-sync:
-	@echo "📚 Syncing product catalog..."
+	@echo "📚 Syncing product catalog and prices..."
 	@cd backend && go run ./cmd/catalog $(ARGS)
 
-# Ingest live TCGplayer prices for every group we hold cards for.
+# Ingest live TCGplayer prices for every group we hold cards for, without the catalog.
+# catalog-sync already stores prices, so use this only on a day it didn't run.
 # Smoke test first with: make prices ARGS="-max-groups 3 -dry-run"
 # TCGCSV caps requests at 10k/24h and price files must not be re-fetched within
 # 24h, so run this at most once a day.

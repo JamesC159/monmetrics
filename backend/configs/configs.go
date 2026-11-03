@@ -135,7 +135,7 @@ func Load() *Config {
 	config.CatalogResumeWindow = parseDuration(getEnv("CATALOG_RESUME_WINDOW", ""), config.CatalogInterval)
 	config.CatalogBaseURL = strings.TrimRight(getEnv("CATALOG_BASE_URL", "https://tcgcsv.com"), "/")
 	config.CatalogUserAgent = getEnv("CATALOG_USER_AGENT", config.ScraperUserAgent)
-	config.CatalogRequestDelay = parseDuration(getEnv("CATALOG_REQUEST_DELAY", "1s"), time.Second)
+	config.CatalogRequestDelay = parseDuration(getEnv("CATALOG_REQUEST_DELAY", "150ms"), 150*time.Millisecond)
 	config.CatalogCategories = parseIntList(os.Getenv("CATALOG_CATEGORIES"))
 	catalogMax, err := strconv.Atoi(getEnv("CATALOG_MAX_PRODUCTS", "0"))
 	if err != nil || catalogMax < 0 {

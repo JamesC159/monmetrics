@@ -141,6 +141,14 @@ func (r *Runner) RunOnce(ctx context.Context) (Result, error) {
 	return result, nil
 }
 
+// IngestGroupPrices stores prices fetched elsewhere - the catalog sync reads them from the
+// same file as the group's products - and reports how many price points it wrote. It
+// implements catalog.PriceSink and needs only DB and DryRun set.
+func (r *Runner) IngestGroupPrices(ctx context.Context, categoryID, groupID int, prices []catalog.ProductPrice, day time.Time) (int, error) {
+	stats, err := r.persistGroup(ctx, GroupRef{CategoryID: categoryID, GroupID: groupID}, prices, day)
+	return stats.PricePoints, err
+}
+
 func isFatal(err error) bool {
 	return err != nil && strings.Contains(err.Error(), catalog.ErrThrottled.Error())
 }

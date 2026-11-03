@@ -17,6 +17,7 @@ import (
 	"github.com/jamesc159/monmetrics/internal/handlers"
 	"github.com/jamesc159/monmetrics/internal/middleware"
 	"github.com/jamesc159/monmetrics/internal/notify"
+	"github.com/jamesc159/monmetrics/internal/pricing"
 	"github.com/jamesc159/monmetrics/internal/scraper"
 )
 
@@ -185,6 +186,7 @@ func main() {
 			Categories:   config.CatalogCategories,
 			MaxProducts:  config.CatalogMaxProducts,
 			ResumeWindow: config.CatalogResumeWindow,
+			Prices:       &pricing.Runner{DB: db},
 		}
 		go catalogRunner.Run(bgCtx)
 	}

@@ -71,13 +71,34 @@ type PriceSource interface {
 	LastUpdated(ctx context.Context) (time.Time, error)
 }
 
+// ProductPriceSource is a Source that returns a group's products and prices from one
+// request, so a single pass refreshes the catalogue and that day's prices.
+type ProductPriceSource interface {
+	ProductsAndPrices(ctx context.Context, categoryID, groupID int) ([]Product, []ProductPrice, error)
+}
+
+// PriceSink stores the prices fetched alongside a group's products and reports how many
+// price points it wrote. The pricing package implements it; it imports this package, so
+// the dependency has to point this way.
+type PriceSink interface {
+	IngestGroupPrices(ctx context.Context, categoryID, groupID int, prices []ProductPrice, day time.Time) (int, error)
+}
+
+// extended matches field against each item's name or display name, ignoring case and
+// spaces: the JSON feed names Pokemon card text "CardText" (display "Card Text"), and
+// the CSV feed carries only the name.
 func (p Product) extended(field string) string {
+	key := extendedKey(field)
 	for _, item := range p.ExtendedData {
-		if strings.EqualFold(item.Name, field) || strings.EqualFold(item.DisplayName, field) {
+		if extendedKey(item.Name) == key || extendedKey(item.DisplayName) == key {
 			return strings.TrimSpace(item.Value)
 		}
 	}
 	return ""
+}
+
+func extendedKey(name string) string {
+	return strings.ToLower(strings.ReplaceAll(name, " ", ""))
 }
 
 // nonTCGCategories are TCGplayer categories that are accessories, miniatures or

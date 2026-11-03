@@ -9,6 +9,7 @@ import (
 	"github.com/jamesc159/monmetrics/configs"
 	"github.com/jamesc159/monmetrics/internal/catalog"
 	"github.com/jamesc159/monmetrics/internal/database"
+	"github.com/jamesc159/monmetrics/internal/pricing"
 )
 
 func main() {
@@ -46,6 +47,7 @@ func main() {
 		ResumeWindow: window,
 		Resync:       *resync,
 		DryRun:       *dryRun,
+		Prices:       &pricing.Runner{DB: db, DryRun: *dryRun},
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)

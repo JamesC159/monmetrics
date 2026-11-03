@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -20,6 +21,9 @@ type Runner struct {
 	ResumeWindow time.Duration // groups ingested more recently than this are skipped; defaults to Interval
 	Resync       bool          // ignore checkpoints and re-ingest every group
 	DryRun       bool
+	// Prices, when set and Source is a ProductPriceSource, stores each group's prices from
+	// the same request as its products, so no separate price ingest is needed that day.
+	Prices PriceSink
 }
 
 // SyncOptions narrows a single sync, used by the CLI for targeted backfills.
@@ -68,6 +72,8 @@ func (r *Runner) RunOnce(ctx context.Context, opts SyncOptions) error {
 		return err
 	}
 	resumeCutoff := now.Add(-r.resumeWindow())
+	// One UTC-midnight price stamp for the whole run, as the price ingest does.
+	day := now.Truncate(24 * time.Hour)
 
 	total, inserted, skipped := 0, int64(0), 0
 	for _, category := range categories {
@@ -87,7 +93,7 @@ func (r *Runner) RunOnce(ctx context.Context, opts SyncOptions) error {
 				skipped++
 				continue
 			}
-			count, upserted, err := r.syncGroup(ctx, category, group)
+			count, upserted, err := r.syncGroup(ctx, category, group, day)
 			if err != nil {
 				r.recordFailure(ctx, category, group, err, time.Now().UTC())
 				log.Printf("catalog sync stopped at %s / %s (resumes here next run): %v", category.DisplayName, group.Name, err)
@@ -152,8 +158,8 @@ func (r *Runner) recordFailure(ctx context.Context, category Category, group Gro
 	}
 }
 
-func (r *Runner) syncGroup(ctx context.Context, category Category, group Group) (int, int64, error) {
-	products, err := r.Source.Products(ctx, category.CategoryID, group.GroupID)
+func (r *Runner) syncGroup(ctx context.Context, category Category, group Group, day time.Time) (int, int64, error) {
+	products, prices, withPrices, err := r.fetchGroup(ctx, category.CategoryID, group.GroupID)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -168,14 +174,37 @@ func (r *Runner) syncGroup(ctx context.Context, category Category, group Group) 
 		for _, card := range cards {
 			log.Printf("[dry-run] %s | %s | %s | %s | %s", card.Game, card.Set, card.Name, card.Category, card.ExternalID)
 		}
+		if withPrices {
+			log.Printf("[dry-run] %s / %s: price_rows=%d", category.DisplayName, group.Name, len(prices))
+		}
 		return len(cards), 0, nil
 	}
 	result, err := UpsertCards(ctx, r.DB, cards, time.Now().UTC())
 	if err != nil {
 		return 0, 0, err
 	}
-	log.Printf("catalog sync %s / %s: products=%d new=%d", category.DisplayName, group.Name, len(cards), result.Upserted)
+	if !withPrices {
+		log.Printf("catalog sync %s / %s: products=%d new=%d", category.DisplayName, group.Name, len(cards), result.Upserted)
+		return len(cards), result.Upserted, nil
+	}
+	// Prices join onto cards by product id, so they go in after the upsert creates new cards.
+	points, err := r.Prices.IngestGroupPrices(ctx, category.CategoryID, group.GroupID, prices, day)
+	if err != nil {
+		return 0, 0, fmt.Errorf("store prices: %w", err)
+	}
+	log.Printf("catalog sync %s / %s: products=%d new=%d price_points=%d", category.DisplayName, group.Name, len(cards), result.Upserted, points)
 	return len(cards), result.Upserted, nil
+}
+
+// fetchGroup reads a group's products, and its prices too when the source serves both in
+// one request and a sink is set to store them. withPrices reports which happened.
+func (r *Runner) fetchGroup(ctx context.Context, categoryID, groupID int) (products []Product, prices []ProductPrice, withPrices bool, err error) {
+	if source, ok := r.Source.(ProductPriceSource); ok && r.Prices != nil {
+		products, prices, err = source.ProductsAndPrices(ctx, categoryID, groupID)
+		return products, prices, true, err
+	}
+	products, err = r.Source.Products(ctx, categoryID, groupID)
+	return products, nil, false, err
 }
 
 func (r *Runner) selectCategories(ctx context.Context, opts SyncOptions) ([]Category, error) {

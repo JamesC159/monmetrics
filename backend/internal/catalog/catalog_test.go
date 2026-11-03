@@ -12,7 +12,8 @@ import (
 const productsFixture = `{"success":true,"errors":[],"results":[
 	{"productId":451396,"categoryId":3,"groupId":3170,"name":"Lugia VSTAR (Secret)","cleanName":"Lugia VSTAR Secret",
 	 "imageUrl":"https://example.test/451396.jpg","url":"https://example.test/lugia",
-	 "extendedData":[{"name":"Number","displayName":"Number","value":"211/195"},{"name":"Rarity","displayName":"Rarity","value":"Secret Rare"}]},
+	 "extendedData":[{"name":"Number","displayName":"Number","value":"211/195"},{"name":"Rarity","displayName":"Rarity","value":"Secret Rare"},
+	  {"name":"CardText","displayName":"Card Text","value":"Summoning Star, \"VSTAR\"\n<br>Once per game."}]},
 	{"productId":451400,"categoryId":3,"groupId":3170,"name":"SWSH12: Silver Tempest Elite Trainer Box","cleanName":"Silver Tempest Elite Trainer Box",
 	 "imageUrl":"https://example.test/451400.jpg","url":"https://example.test/etb","extendedData":[]}
 ]}`
