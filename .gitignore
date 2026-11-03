@@ -63,3 +63,9 @@ data/
 .beads-credential-key
 .beads/proxieddb/
 *.gate.lock*
+
+# Agent instructions and definitions are shared despite the *.md rule above
+!/AGENTS.md
+!/CLAUDE.md
+!/.agents/**/*.md
+!/.claude/agents/*.md
