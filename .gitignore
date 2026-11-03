@@ -17,6 +17,7 @@ dist-ssr
 build
 bin/
 backend/tmp/
+*.tsbuildinfo
 *.local
 
 # Environment variables
