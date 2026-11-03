@@ -22,6 +22,7 @@ import AlertModal from '../components/chart/AlertModal'
 import AlertList from '../components/alerts/AlertList'
 import RecentSalesTable from '../components/card/RecentSalesTable'
 import PriceSummaryStats from '../components/card/PriceSummaryStats'
+import PrintingList from '../components/card/PrintingList'
 import FavoriteButton from '../components/FavoriteButton'
 import { useAlerts } from '../hooks/useAlerts'
 import { readPendingAutosave, useAutosaveChart } from '../hooks/useAutosaveChart'
@@ -469,6 +470,23 @@ export default function CardDetail() {
                 </a>
               )}
             </div>
+
+            {/* Printings */}
+            {card.printings && card.printings.length > 0 && (
+              <div className='glass-effect rounded-2xl p-6'>
+                <h3 className='text-lg font-semibold text-white mb-1'>Printings</h3>
+                <p className='text-xs text-gray-500 mb-4'>
+                  TCGplayer market price per printing. Pick one to chart it.
+                </p>
+                <PrintingList
+                  printings={card.printings}
+                  selected={grade}
+                  onSelect={setGrade}
+                  canSelect={(series) => availableGrades.some((g) => g.grade === series)}
+                  className='-mx-3'
+                />
+              </div>
+            )}
 
             {/* Tags */}
             {card.tags && card.tags.length > 0 && (

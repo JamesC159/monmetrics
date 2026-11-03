@@ -40,6 +40,8 @@ export interface Card {
   product_type?: string
   language?: string
   product_url?: string
+  // TCGplayer printings, best first. The first priced one is the headline current_price.
+  printings?: CardPrinting[]
   catalog_synced_at?: string
   active?: boolean
   // Scrape state: absent ebay_synced_at means no sales have ever been collected
@@ -47,6 +49,13 @@ export interface Card {
   last_scrape_at?: string
   last_sale_count?: number
   scrape_tier?: number
+}
+
+// One TCGplayer printing of a product. series is its price-series key ("reverse-holofoil"),
+// the grade its chart is stored under; market_price is absent when TCGplayer has no figure.
+export interface CardPrinting {
+  series: string
+  market_price?: number
 }
 
 export type FeatureKey =

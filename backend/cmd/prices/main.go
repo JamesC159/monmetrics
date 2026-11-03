@@ -16,6 +16,7 @@ func main() {
 	maxGroups := flag.Int("max-groups", 0, "cap groups per run (0 = every group we hold cards for)")
 	dryRun := flag.Bool("dry-run", false, "fetch and join but write nothing")
 	timeout := flag.Duration("timeout", 2*time.Hour, "overall run timeout")
+	backfill := flag.Bool("backfill-printings", false, "fill in card printings from stored prices, then exit (no network)")
 	flag.Parse()
 
 	config := configs.Load()
@@ -27,6 +28,16 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
+
+	if *backfill {
+		start := time.Now()
+		updated, err := pricing.BackfillPrintings(ctx, db, *dryRun)
+		log.Printf("printings backfilled=%d dry_run=%t in %s", updated, *dryRun, time.Since(start).Round(time.Second))
+		if err != nil {
+			log.Fatal("printings backfill failed: ", err)
+		}
+		return
+	}
 
 	source := catalog.NewTCGCSVSource(
 		config.CatalogBaseURL,

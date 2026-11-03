@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { TrendingUp, TrendingDown, ExternalLink } from 'lucide-react'
 import type { Card } from '../types'
 import FavoriteButton from './FavoriteButton'
+import PrintingList from './card/PrintingList'
 
 interface CardGridProps {
   cards: Card[]
@@ -111,14 +112,20 @@ export default function CardGrid({ cards, columns = 6, showAllDetails = true }: 
             )}
 
             <div className='space-y-2'>
+              {/* Each printing carries its own price, so the list stands in for the headline row. */}
+              {card.printings && card.printings.length > 0 && (
+                <PrintingList printings={card.printings} limit={3} />
+              )}
               {hasPriceData(card) ? (
                 <>
-                  <div className='flex items-center justify-between'>
-                    <span className='text-gray-400 text-xs'>Price:</span>
-                    <span className='text-base font-bold text-green-400'>
-                      {formatPrice(card.current_price)}
-                    </span>
-                  </div>
+                  {!card.printings?.length && (
+                    <div className='flex items-center justify-between'>
+                      <span className='text-gray-400 text-xs'>Price:</span>
+                      <span className='text-base font-bold text-green-400'>
+                        {formatPrice(card.current_price)}
+                      </span>
+                    </div>
+                  )}
 
                   {showAllDetails && (
                     <div className='grid grid-cols-2 gap-2 text-xs'>
@@ -144,7 +151,9 @@ export default function CardGrid({ cards, columns = 6, showAllDetails = true }: 
                   )}
                 </>
               ) : (
-                <div className='text-xs text-gray-500'>No sales data yet</div>
+                !card.printings?.length && (
+                  <div className='text-xs text-gray-500'>No sales data yet</div>
+                )
               )}
 
               {showAllDetails && card.tags && card.tags.length > 0 && (

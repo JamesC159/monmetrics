@@ -2,6 +2,7 @@ package pricing
 
 import (
 	"context"
+	"sort"
 	"strconv"
 	"time"
 
@@ -45,13 +46,6 @@ func (r *Runner) persistGroup(
 	priceOps := make([]mongo.WriteModel, 0, len(prices))
 	marketOps := make([]mongo.WriteModel, 0, len(prices))
 	cardOps := make([]mongo.WriteModel, 0)
-
-	// Best printing seen per card, used for the card's headline price.
-	type headline struct {
-		rank  int
-		value float64
-	}
-	headlines := map[primitive.ObjectID]headline{}
 
 	for _, price := range prices {
 		cardID, ok := cards[externalKey(price.ProductID)]
@@ -105,25 +99,22 @@ func (r *Runner) persistGroup(
 				"grade":   series,
 				"date":    day,
 			}).SetReplacement(bar).SetUpsert(true))
-
-		if rank := printingRank(series); rank < headlines[cardID].rank || headlines[cardID].value == 0 {
-			headlines[cardID] = headline{rank: rank, value: market}
-		}
 	}
 
-	for cardID, h := range headlines {
+	for cardID, printings := range printingsByCard(cards, prices) {
+		set := bson.M{"printings": printings, "updated_at": now}
+		if headline := headlinePrice(printings); headline > 0 {
+			set["current_price"] = headline
+			set["market_price"] = headline
+			set["market_price_synced_at"] = now
+			stats.CardsPriced++
+		}
 		cardOps = append(cardOps, mongo.NewUpdateOneModel().
 			SetFilter(bson.M{"_id": cardID}).
-			SetUpdate(bson.M{"$set": bson.M{
-				"current_price":          round2(h.value),
-				"market_price":           round2(h.value),
-				"market_price_synced_at": now,
-				"updated_at":             now,
-			}}))
+			SetUpdate(bson.M{"$set": set}))
 	}
 
 	stats.PricePoints = len(priceOps)
-	stats.CardsPriced = len(cardOps)
 
 	if r.DryRun {
 		return stats, nil
@@ -178,6 +169,43 @@ func (r *Runner) cardsByExternalID(ctx context.Context, group GroupRef) (map[str
 
 func externalKey(id int) string {
 	return strconv.Itoa(id)
+}
+
+// printingsByCard lists every printing TCGplayer prices for each card we carry, priced or
+// not, best first: primaryPrintings order, then the order the price file lists them.
+func printingsByCard(cards map[string]primitive.ObjectID, prices []catalog.ProductPrice) map[primitive.ObjectID][]models.Printing {
+	byCard := map[primitive.ObjectID][]models.Printing{}
+	for _, price := range prices {
+		cardID, ok := cards[externalKey(price.ProductID)]
+		if !ok {
+			continue
+		}
+		printing := models.Printing{Series: SeriesKey(price.SubTypeName)}
+		if price.MarketPrice != nil && *price.MarketPrice > 0 {
+			printing.MarketPrice = round2(*price.MarketPrice)
+		}
+		byCard[cardID] = append(byCard[cardID], printing)
+	}
+	for _, printings := range byCard {
+		sortPrintings(printings)
+	}
+	return byCard
+}
+
+func sortPrintings(printings []models.Printing) {
+	sort.SliceStable(printings, func(i, j int) bool {
+		return printingRank(printings[i].Series) < printingRank(printings[j].Series)
+	})
+}
+
+// headlinePrice is the card-level price: the best-ranked printing that has one.
+func headlinePrice(printings []models.Printing) float64 {
+	for _, printing := range printings {
+		if printing.MarketPrice > 0 {
+			return printing.MarketPrice
+		}
+	}
+	return 0
 }
 
 func printingRank(series string) int {

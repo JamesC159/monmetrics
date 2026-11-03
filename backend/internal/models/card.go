@@ -44,6 +44,7 @@ type Card struct {
 	ProductURL        string     `bson:"product_url,omitempty" json:"product_url,omitempty"`
 	MarketPrice       float64    `bson:"market_price,omitempty" json:"market_price,omitempty"`
 	MarketPriceSynced *time.Time `bson:"market_price_synced_at,omitempty" json:"market_price_synced_at,omitempty"`
+	Printings         []Printing `bson:"printings,omitempty" json:"printings,omitempty"` // best first; the first priced one is the headline
 	CatalogSyncedAt   *time.Time `bson:"catalog_synced_at,omitempty" json:"catalog_synced_at,omitempty"`
 	Active            bool       `bson:"active" json:"active"`
 
@@ -56,6 +57,14 @@ type Card struct {
 
 	// Popularity and ranking (based on 6-month metrics)
 	PopularityRank int `bson:"popularity_rank,omitempty" json:"popularity_rank,omitempty"`
+}
+
+// Printing is one TCGplayer printing of a product (Normal, Foil, Reverse Holofoil, ...).
+// Series is its price-series key, the grade its price points are stored under.
+// MarketPrice is absent when TCGplayer has no figure for that printing.
+type Printing struct {
+	Series      string  `bson:"series" json:"series"`
+	MarketPrice float64 `bson:"market_price,omitempty" json:"market_price,omitempty"`
 }
 
 // Scrape tiers control how often the sold-listing scraper revisits a card.
