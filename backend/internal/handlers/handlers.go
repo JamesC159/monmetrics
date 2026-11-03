@@ -12,17 +12,21 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"github.com/jamesc159/monmetrics/configs"
+	"github.com/jamesc159/monmetrics/internal/features"
 	"github.com/jamesc159/monmetrics/internal/marketplace"
 	"github.com/jamesc159/monmetrics/internal/middleware"
+	"github.com/jamesc159/monmetrics/internal/notify"
 	"github.com/jamesc159/monmetrics/internal/secure"
 )
 
 // Handlers holds the database and configuration for all handler methods
 type Handlers struct {
-	db     *mongo.Database
-	config *configs.Config
-	market *marketplace.Registry
-	cipher *secure.Cipher
+	db       *mongo.Database
+	config   *configs.Config
+	market   *marketplace.Registry
+	cipher   *secure.Cipher
+	features *features.Registry
+	mailer   notify.Sender
 }
 
 // New creates a new Handlers instance
@@ -35,11 +39,25 @@ func New(db *mongo.Database, config *configs.Config) (*Handlers, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	flags := features.NewRegistry(db)
+	loadCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	// A cold or unreachable collection just means every flag keeps its declared default.
+	if err := flags.Load(loadCtx); err != nil {
+		fmt.Printf("⚠️  Feature flags: using defaults, load failed: %v\n", err)
+	}
+
 	return &Handlers{
-		db:     db,
-		config: config,
-		market: market,
-		cipher: cipher,
+		db:       db,
+		config:   config,
+		market:   market,
+		cipher:   cipher,
+		features: flags,
+		mailer: notify.NewSender(notify.Config{
+			Host: config.SMTPHost, Port: config.SMTPPort, User: config.SMTPUser,
+			Password: config.SMTPPassword, From: config.SMTPFrom,
+		}),
 	}, nil
 }
 

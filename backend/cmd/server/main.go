@@ -12,10 +12,12 @@ import (
 
 	"github.com/jamesc159/monmetrics/configs"
 	"github.com/jamesc159/monmetrics/internal/alerts"
+	"github.com/jamesc159/monmetrics/internal/catalog"
 	"github.com/jamesc159/monmetrics/internal/database"
 	"github.com/jamesc159/monmetrics/internal/handlers"
 	"github.com/jamesc159/monmetrics/internal/middleware"
 	"github.com/jamesc159/monmetrics/internal/notify"
+	"github.com/jamesc159/monmetrics/internal/scraper"
 )
 
 func main() {
@@ -46,6 +48,12 @@ func main() {
 	apiMux.HandleFunc("GET /cards/search", h.SearchCards)
 	apiMux.HandleFunc("GET /cards/{id}", h.GetCard)
 	apiMux.HandleFunc("GET /cards/{id}/prices", h.GetCardPrices)
+	apiMux.HandleFunc("GET /cards/{id}/price-summary", h.GetPriceSummary)
+	apiMux.HandleFunc("GET /cards/{id}/sales", h.GetCardSales)
+	apiMux.HandleFunc("GET /cards/{id}/grades", h.GetCardGrades)
+	apiMux.HandleFunc("GET /games", h.GetGames)
+	apiMux.HandleFunc("GET /sets", h.GetSets)
+	apiMux.HandleFunc("GET /features", h.GetFeatures)
 
 	// Featured content and organized search
 	apiMux.HandleFunc("GET /featured-content", h.GetFeaturedContent)
@@ -56,6 +64,8 @@ func main() {
 	apiMux.HandleFunc("POST /auth/register", h.Register)
 	apiMux.HandleFunc("POST /auth/login", h.Login)
 	apiMux.HandleFunc("POST /auth/logout", h.Logout)
+	apiMux.HandleFunc("POST /auth/forgot-password", h.ForgotPassword)
+	apiMux.HandleFunc("POST /auth/reset-password", h.ResetPassword)
 
 	// Mock marketplace consent screen (reached by browser redirect; signed state authorizes it)
 	if config.MarketplaceMode == "mock" {
@@ -98,6 +108,11 @@ func main() {
 	protectedMux.HandleFunc("POST /marketplace/{provider}/callback", h.MarketplaceCallback)
 	protectedMux.HandleFunc("DELETE /marketplace/{provider}", h.DisconnectMarketplace)
 
+	// Admin routes: auth then an allowlist check, on their own mux.
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /features", h.GetAdminFeatures)
+	adminMux.HandleFunc("PUT /features/{key}", h.UpdateAdminFeature)
+
 	// Apply middleware stack to public API routes
 	api := middleware.Chain(
 		middleware.CORS(config.CORSOrigins),
@@ -115,9 +130,19 @@ func main() {
 		middleware.AuthRequired(config.JWTSecret),
 	)(protectedMux)
 
+	adminAPI := middleware.Chain(
+		middleware.CORS(config.CORSOrigins),
+		middleware.SecurityHeaders(),
+		middleware.RateLimit(config.RateLimitRequests, config.RateLimitWindow),
+		middleware.RequestLogger(),
+		middleware.AuthRequired(config.JWTSecret),
+		middleware.AdminRequired(config.AdminEmails),
+	)(adminMux)
+
 	// Mount routes
 	mux.Handle("/api/", http.StripPrefix("/api", api))
 	mux.Handle("/api/protected/", http.StripPrefix("/api/protected", protectedAPI))
+	mux.Handle("/api/admin/", http.StripPrefix("/api/admin", adminAPI))
 
 	// Create HTTP server
 	server := &http.Server{
@@ -142,6 +167,26 @@ func main() {
 			FrontendURL: config.FrontendURL,
 		}
 		go evaluator.Run(bgCtx)
+	}
+	if config.ScraperEnabled {
+		source := scraper.NewEbayHTMLSource(config.ScraperBaseURL, config.ScraperUserAgent, config.ScraperRequestDelay, config.ScraperMaxPages)
+		runner := &scraper.Runner{
+			DB: db, Source: source, Interval: config.ScraperInterval, MaxPages: config.ScraperMaxPages,
+			Scheduler:   &scraper.Scheduler{DB: db, Intervals: config.ScrapeTierIntervals},
+			DailyBudget: config.ScraperDailyBudget,
+		}
+		go runner.Run(bgCtx)
+	}
+	if config.CatalogEnabled {
+		catalogRunner := &catalog.Runner{
+			DB:           db,
+			Source:       catalog.NewTCGCSVSource(config.CatalogBaseURL, config.CatalogUserAgent, config.CatalogRequestDelay),
+			Interval:     config.CatalogInterval,
+			Categories:   config.CatalogCategories,
+			MaxProducts:  config.CatalogMaxProducts,
+			ResumeWindow: config.CatalogResumeWindow,
+		}
+		go catalogRunner.Run(bgCtx)
 	}
 
 	go func() {

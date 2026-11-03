@@ -64,7 +64,7 @@ func (h *Handlers) GetCardsByGame(w http.ResponseWriter, r *http.Request) {
 	collection := h.db.Collection("cards")
 
 	// Get all unique games
-	games, err := collection.Distinct(ctx, "game", bson.M{"category": "card"})
+	games, err := collection.Distinct(ctx, "game", h.applyEnabledGames(bson.M{"category": "card"}))
 	if err != nil {
 		fmt.Printf("Error retrieving games: %v\n", err)
 		// Return empty array instead of error
@@ -94,28 +94,11 @@ func (h *Handlers) GetCardsByGame(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Get top 12 cards by popularity
-		findOptions := options.Find().
-			SetSort(bson.D{{Key: "popularity_rank", Value: 1}, {Key: "current_price", Value: -1}}).
-			SetLimit(12)
-
-		cursor, err := collection.Find(ctx, bson.M{
-			"game":     gameStr,
-			"category": "card",
-		}, findOptions)
-
+		cards, err := h.topCardsForGame(ctx, gameStr, "card")
 		if err != nil {
 			fmt.Printf("Error retrieving cards for game %s: %v\n", gameStr, err)
 			continue
 		}
-
-		var cards []models.Card
-		if err = cursor.All(ctx, &cards); err != nil {
-			cursor.Close(ctx)
-			fmt.Printf("Error decoding cards for game %s: %v\n", gameStr, err)
-			continue
-		}
-		cursor.Close(ctx)
 
 		gameGroups = append(gameGroups, models.GameCardGroup{
 			Game:       gameStr,
@@ -137,7 +120,7 @@ func (h *Handlers) GetSealedByGame(w http.ResponseWriter, r *http.Request) {
 	collection := h.db.Collection("cards")
 
 	// Get all unique games that have sealed products
-	games, err := collection.Distinct(ctx, "game", bson.M{"category": "sealed"})
+	games, err := collection.Distinct(ctx, "game", h.applyEnabledGames(bson.M{"category": "sealed"}))
 	if err != nil {
 		fmt.Printf("Error retrieving games: %v\n", err)
 		// Return empty array instead of error
@@ -167,28 +150,11 @@ func (h *Handlers) GetSealedByGame(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Get top 12 sealed products by popularity
-		findOptions := options.Find().
-			SetSort(bson.D{{Key: "popularity_rank", Value: 1}, {Key: "current_price", Value: -1}}).
-			SetLimit(12)
-
-		cursor, err := collection.Find(ctx, bson.M{
-			"game":     gameStr,
-			"category": "sealed",
-		}, findOptions)
-
+		cards, err := h.topCardsForGame(ctx, gameStr, "sealed")
 		if err != nil {
 			fmt.Printf("Error retrieving sealed for game %s: %v\n", gameStr, err)
 			continue
 		}
-
-		var cards []models.Card
-		if err = cursor.All(ctx, &cards); err != nil {
-			cursor.Close(ctx)
-			fmt.Printf("Error decoding sealed for game %s: %v\n", gameStr, err)
-			continue
-		}
-		cursor.Close(ctx)
 
 		gameGroups = append(gameGroups, models.GameCardGroup{
 			Game:       gameStr,
@@ -200,4 +166,50 @@ func (h *Handlers) GetSealedByGame(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(gameGroups)
+}
+
+// gameGroupSize is how many items each by-game row shows (2 rows of 6).
+const gameGroupSize = 12
+
+// topCardsForGame returns the items to feature for a game, preferring ones that
+// already have scraped sales data; unpriced catalog entries only fill the gap.
+func (h *Handlers) topCardsForGame(ctx context.Context, game, category string) ([]models.Card, error) {
+	collection := h.db.Collection("cards")
+	base := bson.M{"game": game, "category": category, "active": bson.M{"$ne": false}}
+
+	fetch := func(filter bson.M, limit int) ([]models.Card, error) {
+		opts := options.Find().SetSort(bson.D{{Key: "current_price", Value: -1}}).SetLimit(int64(limit))
+		cursor, err := collection.Find(ctx, filter, opts)
+		if err != nil {
+			return nil, err
+		}
+		defer cursor.Close(ctx)
+		var out []models.Card
+		if err := cursor.All(ctx, &out); err != nil {
+			return nil, err
+		}
+		return out, nil
+	}
+
+	priced := bson.M{"current_price": bson.M{"$gt": 0}}
+	for k, v := range base {
+		priced[k] = v
+	}
+	cards, err := fetch(priced, gameGroupSize)
+	if err != nil {
+		return nil, err
+	}
+	if len(cards) >= gameGroupSize {
+		return cards, nil
+	}
+
+	unpriced := bson.M{"current_price": bson.M{"$not": bson.M{"$gt": 0}}}
+	for k, v := range base {
+		unpriced[k] = v
+	}
+	filler, err := fetch(unpriced, gameGroupSize-len(cards))
+	if err != nil {
+		return nil, err
+	}
+	return append(cards, filler...), nil
 }

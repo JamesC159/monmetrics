@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -19,75 +20,125 @@ import (
 
 const maxWarmupDays = 400
 
+// validGradePattern accepts both eBay grades (raw, psa-10, bgs-9.5) and TCGplayer
+// printings (normal, foil, 1st-edition, reverse-holofoil). Values are used only as exact
+// match terms, so the charset bound is about rejecting junk, not escaping.
+var validGradePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9.-]{0,31}$`)
+
+// searchSorts whitelists the sort orders a client may request.
+var searchSorts = map[string]bson.D{
+	"relevance":  {{Key: "current_price", Value: -1}, {Key: "updated_at", Value: -1}},
+	"price_desc": {{Key: "current_price", Value: -1}},
+	"price_asc":  {{Key: "current_price", Value: 1}},
+	"name":       {{Key: "name", Value: 1}},
+	"recent":     {{Key: "updated_at", Value: -1}},
+}
+
+// searchFilters carries the validated query parameters for a catalog search.
+type searchFilters struct {
+	Query       string
+	Game        string
+	Category    string
+	Set         string
+	ProductType string
+	Rarity      string
+	PricedOnly  bool
+}
+
 // buildSearchFilter creates a robust search filter without relying on text indexes
-func (h *Handlers) buildSearchFilter(query, game, category string) bson.M {
-	filter := bson.M{}
+func (h *Handlers) buildSearchFilter(f searchFilters) bson.M {
+	filter := bson.M{"active": bson.M{"$ne": false}}
 
 	// Handle text search using regex patterns (more reliable)
-	if query != "" {
-		cleanQuery := strings.TrimSpace(query)
-		if cleanQuery != "" {
-			// Create an array of regex patterns for different search strategies
-			orConditions := []bson.M{
-				{"name": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
-				{"set": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
-				{"game": bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}},
-			}
+	if query := strings.TrimSpace(f.Query); query != "" {
+		// User input is escaped: it is pattern data, never a pattern.
+		escapedQuery := regexp.QuoteMeta(query)
+		orConditions := []bson.M{
+			{"name": bson.M{"$regex": primitive.Regex{Pattern: escapedQuery, Options: "i"}}},
+			{"set": bson.M{"$regex": primitive.Regex{Pattern: escapedQuery, Options: "i"}}},
+			{"game": bson.M{"$regex": primitive.Regex{Pattern: escapedQuery, Options: "i"}}},
+		}
 
-			// Add search terms array match
-			lowerQuery := strings.ToLower(cleanQuery)
-			orConditions = append(orConditions, bson.M{"search_terms": bson.M{"$in": []string{lowerQuery}}})
+		// Indexed token match: the only branch that scales past a small catalog.
+		lowerQuery := strings.ToLower(query)
+		tokens := []string{lowerQuery}
+		words := strings.Fields(lowerQuery)
+		if len(words) > 1 {
+			tokens = append(tokens, words...)
+		}
+		orConditions = append(orConditions, bson.M{"search_terms": bson.M{"$in": tokens}})
 
-			// Split query into words for partial matching
-			words := strings.Fields(cleanQuery)
-			if len(words) > 1 {
-				for _, word := range words {
-					if len(word) > 2 { // Only search for words longer than 2 characters
-						orConditions = append(orConditions,
-							bson.M{"name": bson.M{"$regex": primitive.Regex{Pattern: word, Options: "i"}}},
-						)
-					}
+		if len(words) > 1 {
+			for _, word := range words {
+				if len(word) > 2 { // Only search for words longer than 2 characters
+					orConditions = append(orConditions,
+						bson.M{"name": bson.M{"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(word), Options: "i"}}},
+					)
 				}
 			}
-
-			filter["$or"] = orConditions
 		}
+
+		filter["$or"] = orConditions
 	}
 
-	// Game filter
-	if game != "" {
-		filter["game"] = bson.M{"$regex": primitive.Regex{Pattern: game, Options: "i"}}
+	if f.Game != "" {
+		filter["game"] = bson.M{"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(f.Game), Options: "i"}}
+	}
+	if f.Category != "" {
+		filter["category"] = f.Category
+	}
+	if f.Set != "" {
+		filter["set"] = bson.M{"$regex": primitive.Regex{Pattern: "^" + regexp.QuoteMeta(f.Set) + "$", Options: "i"}}
+	}
+	if f.ProductType != "" {
+		filter["product_type"] = f.ProductType
+	}
+	if f.Rarity != "" {
+		filter["rarity"] = bson.M{"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(f.Rarity), Options: "i"}}
+	}
+	if f.PricedOnly {
+		filter["current_price"] = bson.M{"$gt": 0}
 	}
 
-	// Category filter
-	if category != "" {
-		filter["category"] = category
-	}
-
-	return filter
+	return h.applyEnabledGames(filter)
 }
 
 // SearchCards searches for cards based on query parameters
 func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
-	query := r.URL.Query().Get("q")
-	game := r.URL.Query().Get("game")
-	category := r.URL.Query().Get("category")
-	pageStr := r.URL.Query().Get("page")
-	limitStr := r.URL.Query().Get("limit")
+	q := r.URL.Query()
+	filters := searchFilters{
+		Query:       q.Get("q"),
+		Game:        q.Get("game"),
+		Category:    q.Get("category"),
+		Set:         q.Get("set"),
+		ProductType: q.Get("product_type"),
+		Rarity:      q.Get("rarity"),
+		PricedOnly:  q.Get("priced") == "true",
+	}
+	if filters.Category != "" && !validCatalogCategories[filters.Category] {
+		h.sendError(w, "Invalid category", http.StatusBadRequest, nil)
+		return
+	}
+
+	sortKey := q.Get("sort")
+	if sortKey == "" {
+		sortKey = "relevance"
+	}
+	sort, ok := searchSorts[sortKey]
+	if !ok {
+		h.sendError(w, "Invalid sort", http.StatusBadRequest, nil)
+		return
+	}
 
 	// Parse pagination parameters
 	page := 1
-	if pageStr != "" {
-		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
-			page = p
-		}
+	if p, err := strconv.Atoi(q.Get("page")); err == nil && p > 0 {
+		page = p
 	}
 
 	limit := 20
-	if limitStr != "" {
-		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
-			limit = l
-		}
+	if l, err := strconv.Atoi(q.Get("limit")); err == nil && l > 0 && l <= 100 {
+		limit = l
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -96,7 +147,7 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 	collection := h.db.Collection("cards")
 
 	// Build search filter using the robust method
-	filter := h.buildSearchFilter(query, game, category)
+	filter := h.buildSearchFilter(filters)
 
 	// Count total results with improved error handling
 	total, err := collection.CountDocuments(ctx, filter)
@@ -106,19 +157,16 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 
 		// If there's a complex query causing issues, try with just basic filters
 		fallbackFilter := bson.M{}
-		if game != "" {
-			fallbackFilter["game"] = bson.M{"$regex": primitive.Regex{Pattern: game, Options: "i"}}
+		if filters.Game != "" {
+			fallbackFilter["game"] = bson.M{"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(filters.Game), Options: "i"}}
 		}
-		if category != "" {
-			fallbackFilter["category"] = category
+		if filters.Category != "" {
+			fallbackFilter["category"] = filters.Category
 		}
 
 		// If we still have a query but the complex search failed, try simple name search
-		if query != "" {
-			cleanQuery := strings.TrimSpace(query)
-			if cleanQuery != "" {
-				fallbackFilter["name"] = bson.M{"$regex": primitive.Regex{Pattern: cleanQuery, Options: "i"}}
-			}
+		if cleanQuery := strings.TrimSpace(filters.Query); cleanQuery != "" {
+			fallbackFilter["name"] = bson.M{"$regex": primitive.Regex{Pattern: regexp.QuoteMeta(cleanQuery), Options: "i"}}
 		}
 
 		// Try the fallback count
@@ -141,7 +189,7 @@ func (h *Handlers) SearchCards(w http.ResponseWriter, r *http.Request) {
 	findOptions := options.Find()
 	findOptions.SetSkip(int64(skip))
 	findOptions.SetLimit(int64(limit))
-	findOptions.SetSort(bson.M{"updated_at": -1})
+	findOptions.SetSort(sort)
 
 	// Execute search
 	cursor, err := collection.Find(ctx, filter, findOptions)
@@ -220,6 +268,19 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid card ID", http.StatusBadRequest)
 		return
 	}
+	grade := r.URL.Query().Get("grade")
+	if grade == "" {
+		grade = "raw"
+	}
+	if !validGradePattern.MatchString(grade) {
+		h.sendError(w, "Invalid grade", http.StatusBadRequest, nil)
+		return
+	}
+	source := r.URL.Query().Get("source")
+	if source != "" && !validChartSources[source] {
+		h.sendError(w, "Invalid source", http.StatusBadRequest, nil)
+		return
+	}
 
 	// Parse time range
 	timeRange := r.URL.Query().Get("range")
@@ -229,7 +290,7 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 
 	// Calculate start date based on range
 	var startDate time.Time
-	now := time.Now()
+	now := time.Now().UTC()
 
 	switch timeRange {
 	case "1d":
@@ -271,9 +332,19 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 	filter := bson.M{
 		"card_id": objectID,
 		"timestamp": bson.M{
-			"$gte": queryStart,
+			"$gte": queryStart.UTC().Truncate(24 * time.Hour),
 			"$lte": now,
 		},
+	}
+	if grade == "raw" {
+		filter["$or"] = bson.A{
+			bson.M{"grade": "raw"}, bson.M{"grade": ""}, bson.M{"grade": bson.M{"$exists": false}},
+		}
+	} else {
+		filter["grade"] = grade
+	}
+	if source != "" && source != "all" {
+		filter["source"] = source
 	}
 
 	// Sort by timestamp
@@ -314,13 +385,24 @@ func (h *Handlers) GetCardPrices(w http.ResponseWriter, r *http.Request) {
 
 	// Get market data
 	marketDataCollection := h.db.Collection("market_data")
-	marketCursor, err := marketDataCollection.Find(ctx, bson.M{
+	marketFilter := bson.M{
 		"card_id": objectID,
 		"date": bson.M{
-			"$gte": startDate,
+			"$gte": startDate.UTC().Truncate(24 * time.Hour),
 			"$lte": now,
 		},
-	})
+	}
+	if grade == "raw" {
+		marketFilter["$or"] = bson.A{
+			bson.M{"grade": "raw"}, bson.M{"grade": ""}, bson.M{"grade": bson.M{"$exists": false}},
+		}
+	} else {
+		marketFilter["grade"] = grade
+	}
+	if source != "" && source != "all" {
+		marketFilter["source"] = source
+	}
+	marketCursor, err := marketDataCollection.Find(ctx, marketFilter)
 
 	var marketData []models.MarketData
 	if err != nil {
