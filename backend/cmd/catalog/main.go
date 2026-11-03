@@ -20,6 +20,7 @@ func main() {
 	resync := flag.Bool("resync", false, "ignore checkpoints and re-ingest every group")
 	resumeWindow := flag.Duration("resume-window", 0, "skip groups ingested more recently than this (0 = CATALOG_RESUME_WINDOW)")
 	timeout := flag.Duration("timeout", 2*time.Hour, "overall sync timeout")
+	cleanDescriptions := flag.Bool("clean-descriptions", false, "rewrite stored card descriptions that still hold HTML; reads MongoDB only, skips the sync (honours -dry-run)")
 	flag.Parse()
 
 	config := configs.Load()
@@ -28,6 +29,17 @@ func main() {
 		log.Fatal("Failed to connect to database:", err)
 	}
 	defer database.Disconnect()
+
+	if *cleanDescriptions {
+		ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+		defer cancel()
+		scanned, changed, err := catalog.RepairDescriptions(ctx, db, *dryRun)
+		if err != nil {
+			log.Fatal("description repair failed:", err)
+		}
+		log.Printf("description repair: scanned=%d changed=%d dry_run=%t", scanned, changed, *dryRun)
+		return
+	}
 
 	maxProducts := config.CatalogMaxProducts
 	if *limit > 0 {

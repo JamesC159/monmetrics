@@ -410,7 +410,7 @@ export default function CardDetail() {
               </div>
 
               {card.description && (
-                <p className='text-gray-300 text-sm leading-relaxed'>{card.description}</p>
+                <p className='text-gray-300 text-sm leading-relaxed whitespace-pre-line'>{card.description}</p>
               )}
             </div>
 

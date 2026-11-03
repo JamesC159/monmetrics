@@ -62,7 +62,7 @@ func NormalizeProduct(source string, category Category, group Group, product Pro
 		Rarity:           rarity,
 		Number:           number,
 		ImageURL:         strings.TrimSpace(product.ImageURL),
-		Description:      product.extended("Card Text"),
+		Description:      cleanCardText(product.extended("Card Text")),
 		CatalogSource:    source,
 		ExternalID:       strconv.Itoa(product.ProductID),
 		ExternalGroupID:  strconv.Itoa(group.GroupID),
