@@ -132,16 +132,23 @@ func (r *Runner) loadResumePoint(ctx context.Context) (map[string]time.Time, err
 	if r.Resync || r.DryRun || r.DB == nil {
 		return map[string]time.Time{}, nil
 	}
-	checkpoints, err := LoadCheckpoints(ctx, r.DB, r.Source.Name())
+	// When this sync stores prices, a group checkpointed without them is ingested again.
+	checkpoints, err := LoadCheckpoints(ctx, r.DB, r.Source.Name(), r.storesPrices())
 	if err != nil {
 		return nil, err
 	}
 	if len(checkpoints) > 0 {
-		log.Printf("catalog sync resuming: %d groups already ingested within %s", len(checkpoints), r.resumeWindow())
+		what := "ingested"
+		if r.storesPrices() {
+			what = "ingested with prices"
+		}
+		log.Printf("catalog sync resuming: %d groups already %s within %s", len(checkpoints), what, r.resumeWindow())
 	}
 	return checkpoints, nil
 }
 
+// recordProgress checkpoints a group that synced without error. When the sync stores
+// prices, that includes the group's prices, or confirms it has none.
 func (r *Runner) recordProgress(ctx context.Context, category Category, group Group, products int, now time.Time) {
 	if r.DryRun || r.DB == nil {
 		return
@@ -149,6 +156,9 @@ func (r *Runner) recordProgress(ctx context.Context, category Category, group Gr
 	checkpoint := GroupCheckpoint{
 		Source: r.Source.Name(), CategoryID: category.CategoryID, GroupID: group.GroupID,
 		CategoryName: category.DisplayName, GroupName: group.Name, Products: products, CompletedAt: now,
+	}
+	if r.storesPrices() {
+		checkpoint.PricesSyncedAt = &now
 	}
 	if err := SaveCheckpoint(ctx, r.DB, checkpoint); err != nil {
 		log.Printf("catalog checkpoint write failed for %s / %s: %v", category.DisplayName, group.Name, err)
@@ -205,12 +215,19 @@ func (r *Runner) syncGroup(ctx context.Context, category Category, group Group, 
 // fetchGroup reads a group's products, and its prices too when the source serves both in
 // one request and a sink is set to store them. withPrices reports which happened.
 func (r *Runner) fetchGroup(ctx context.Context, categoryID, groupID int) (products []Product, prices []ProductPrice, withPrices bool, err error) {
-	if source, ok := r.Source.(ProductPriceSource); ok && r.Prices != nil {
-		products, prices, err = source.ProductsAndPrices(ctx, categoryID, groupID)
+	if r.storesPrices() {
+		products, prices, err = r.Source.(ProductPriceSource).ProductsAndPrices(ctx, categoryID, groupID)
 		return products, prices, true, err
 	}
 	products, err = r.Source.Products(ctx, categoryID, groupID)
 	return products, nil, false, err
+}
+
+// storesPrices reports whether each group's prices are stored in the same pass as its
+// products: the source serves both in one request and a sink is set.
+func (r *Runner) storesPrices() bool {
+	_, ok := r.Source.(ProductPriceSource)
+	return ok && r.Prices != nil
 }
 
 func (r *Runner) selectCategories(ctx context.Context, opts SyncOptions) ([]Category, error) {

@@ -90,6 +90,72 @@ func TestShouldSkipGroupUsesIngestionTimestamp(t *testing.T) {
 	}
 }
 
+func TestIngestedAtRequiresPricesWhenTheSyncStoresThem(t *testing.T) {
+	completed := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	earlier := completed.Add(-30 * time.Hour)
+
+	unpriced := GroupCheckpoint{CompletedAt: completed}
+	if got := unpriced.ingestedAt(false); !got.Equal(completed) {
+		t.Errorf("a products-only sync should resume from completed_at, got %v", got)
+	}
+	if got := unpriced.ingestedAt(true); !got.IsZero() {
+		t.Errorf("a group checkpointed without prices must be ingested again, got %v", got)
+	}
+
+	priced := GroupCheckpoint{CompletedAt: completed, PricesSyncedAt: &completed}
+	if got := priced.ingestedAt(true); !got.Equal(completed) {
+		t.Errorf("a priced group should resume from completed_at, got %v", got)
+	}
+
+	stalePrices := GroupCheckpoint{CompletedAt: completed, PricesSyncedAt: &earlier}
+	if got := stalePrices.ingestedAt(true); !got.Equal(earlier) {
+		t.Errorf("a later products-only pass must not hide stale prices, got %v", got)
+	}
+}
+
+func TestResumeTimesFallBackToCardPriceTimes(t *testing.T) {
+	completed := time.Date(2026, 1, 10, 12, 0, 0, 0, time.UTC)
+	pricedLater := completed.Add(2 * time.Hour)
+	records := []GroupCheckpoint{
+		{CategoryID: 1, GroupID: 1, CompletedAt: completed},                             // cards priced since, e.g. by `make prices`
+		{CategoryID: 1, GroupID: 2, CompletedAt: completed},                             // never priced
+		{CategoryID: 1, GroupID: 3, CompletedAt: completed, PricesSyncedAt: &completed}, // priced by the catalog pass
+	}
+	priced := map[string]time.Time{checkpointKey(1, 1): pricedLater, checkpointKey(1, 3): pricedLater}
+
+	got := resumeTimes(records, priced, true)
+	if at, ok := got[checkpointKey(1, 1)]; !ok || !at.Equal(completed) {
+		t.Errorf("a group whose cards were priced should resume from its checkpoint, got %v (present %v)", at, ok)
+	}
+	if _, ok := got[checkpointKey(1, 2)]; ok {
+		t.Error("a group with no stored prices must be ingested again")
+	}
+	if at := got[checkpointKey(1, 3)]; !at.Equal(completed) {
+		t.Errorf("the checkpoint's own prices time should win, got %v", at)
+	}
+
+	if all := resumeTimes(records, nil, false); len(all) != 3 {
+		t.Errorf("a products-only sync should resume past every completed group, got %v", all)
+	}
+}
+
+func TestStoresPricesNeedsCombinedSourceAndSink(t *testing.T) {
+	combined := &productPriceStub{stubSource: &stubSource{}}
+	for _, test := range []struct {
+		name   string
+		runner *Runner
+		want   bool
+	}{
+		{"products-only source", &Runner{Source: &stubSource{}, Prices: &sinkStub{}}, false},
+		{"no sink", &Runner{Source: combined}, false},
+		{"combined source and sink", &Runner{Source: combined, Prices: &sinkStub{}}, true},
+	} {
+		if got := test.runner.storesPrices(); got != test.want {
+			t.Errorf("%s: storesPrices = %v, want %v", test.name, got, test.want)
+		}
+	}
+}
+
 func TestResumeWindowDefaultsToInterval(t *testing.T) {
 	if got := (&Runner{Interval: 6 * time.Hour}).resumeWindow(); got != 6*time.Hour {
 		t.Errorf("resumeWindow = %v, want 6h", got)
