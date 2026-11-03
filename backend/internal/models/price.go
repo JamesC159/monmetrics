@@ -13,6 +13,7 @@ type PricePoint struct {
 	Price     float64            `bson:"price" json:"price"`
 	Volume    int                `bson:"volume,omitempty" json:"volume,omitempty"`
 	Source    string             `bson:"source" json:"source"` // "ebay", "tcgplayer"
+	Grade     string             `bson:"grade,omitempty" json:"grade,omitempty"`
 	Timestamp time.Time          `bson:"timestamp" json:"timestamp"`
 	CreatedAt time.Time          `bson:"created_at" json:"created_at"`
 }

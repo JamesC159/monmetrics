@@ -123,6 +123,32 @@ func createIndexes(db *mongo.Database) error {
 		{
 			Keys: bson.D{{Key: "name", Value: 1}},
 		},
+		{
+			Keys: bson.D{{Key: "search_terms", Value: 1}},
+		},
+		{
+			// Partial so pre-catalog cards (no external_id) do not collide on null.
+			Keys: bson.D{{Key: "catalog_source", Value: 1}, {Key: "external_id", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("catalog_identity_unique").
+				SetPartialFilterExpression(bson.M{"external_id": bson.M{"$exists": true}}),
+		},
+		{
+			Keys:    bson.D{{Key: "next_scrape_at", Value: 1}, {Key: "scrape_tier", Value: 1}},
+			Options: options.Index().SetName("scrape_queue"),
+		},
+		{
+			// Backs the by-game rows and the catalog browse/search filters.
+			Keys:    bson.D{{Key: "game", Value: 1}, {Key: "category", Value: 1}, {Key: "current_price", Value: -1}},
+			Options: options.Index().SetName("catalog_browse"),
+		},
+		{
+			Keys:    bson.D{{Key: "set", Value: 1}},
+			Options: options.Index().SetName("catalog_set"),
+		},
+		{
+			Keys:    bson.D{{Key: "product_type", Value: 1}},
+			Options: options.Index().SetName("catalog_product_type"),
+		},
 	}
 
 	_, err = cardsCollection.Indexes().CreateMany(ctx, otherIndexes)
@@ -140,6 +166,9 @@ func createIndexes(db *mongo.Database) error {
 			Keys: bson.D{{Key: "card_id", Value: 1}, {Key: "source", Value: 1}, {Key: "timestamp", Value: -1}},
 		},
 		{
+			Keys: bson.D{{Key: "card_id", Value: 1}, {Key: "source", Value: 1}, {Key: "grade", Value: 1}, {Key: "timestamp", Value: -1}},
+		},
+		{
 			Keys:    bson.D{{Key: "timestamp", Value: 1}},
 			Options: options.Index().SetExpireAfterSeconds(int32((5 * 365 * 24 * time.Hour).Seconds())), // 5 years TTL
 		},
@@ -150,10 +179,29 @@ func createIndexes(db *mongo.Database) error {
 
 	// Market data collection indexes
 	marketDataCollection := db.Collection("market_data")
+	marketIndexes, listErr := marketDataCollection.Indexes().List(ctx)
+	if listErr == nil {
+		for marketIndexes.Next(ctx) {
+			var index struct {
+				Name   string `bson:"name"`
+				Key    bson.D `bson:"key"`
+				Unique bool   `bson:"unique"`
+			}
+			if decodeErr := marketIndexes.Decode(&index); decodeErr != nil || !index.Unique || len(index.Key) != 2 {
+				continue
+			}
+			if index.Key[0].Key == "card_id" && index.Key[1].Key == "date" {
+				if _, dropErr := marketDataCollection.Indexes().DropOne(ctx, index.Name); dropErr != nil {
+					fmt.Printf("Warning: Failed to replace market data index %s: %v\n", index.Name, dropErr)
+				}
+			}
+		}
+		marketIndexes.Close(ctx)
+	}
 	_, err = marketDataCollection.Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
-			Keys:    bson.D{{Key: "card_id", Value: 1}, {Key: "date", Value: 1}},
-			Options: options.Index().SetUnique(true),
+			Keys:    bson.D{{Key: "card_id", Value: 1}, {Key: "source", Value: 1}, {Key: "grade", Value: 1}, {Key: "date", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("card_source_grade_date_unique"),
 		},
 		{
 			Keys: bson.D{{Key: "card_id", Value: 1}, {Key: "date", Value: -1}},
@@ -161,6 +209,30 @@ func createIndexes(db *mongo.Database) error {
 	})
 	if err != nil {
 		fmt.Printf("Warning: Failed to create market data indexes: %v\n", err)
+	}
+
+	_, err = db.Collection("sold_listings").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "source", Value: 1}, {Key: "item_id", Value: 1}}, Options: options.Index().SetUnique(true)},
+		{Keys: bson.D{{Key: "card_id", Value: 1}, {Key: "sold_at", Value: -1}}},
+		{Keys: bson.D{{Key: "sold_at", Value: 1}}, Options: options.Index().SetExpireAfterSeconds(int32((5 * 365 * 24 * time.Hour).Seconds()))},
+	})
+	if err != nil {
+		fmt.Printf("Warning: Failed to create sold listing indexes: %v\n", err)
+	}
+	_, err = db.Collection("price_summaries").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "card_id", Value: 1}, {Key: "source", Value: 1}, {Key: "grade", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+	if err != nil {
+		fmt.Printf("Warning: Failed to create price summary index: %v\n", err)
+	}
+
+	_, err = db.Collection("catalog_sync_state").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "source", Value: 1}, {Key: "category_id", Value: 1}, {Key: "group_id", Value: 1}},
+		Options: options.Index().SetUnique(true).SetName("catalog_sync_group_unique"),
+	})
+	if err != nil {
+		fmt.Printf("Warning: Failed to create catalog sync state index: %v\n", err)
 	}
 
 	// Saved charts collection indexes

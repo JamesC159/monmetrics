@@ -5,6 +5,7 @@ go 1.24.2
 require (
 	go.mongodb.org/mongo-driver v1.17.4
 	golang.org/x/crypto v0.43.0
+	golang.org/x/net v0.45.0
 )
 
 require (

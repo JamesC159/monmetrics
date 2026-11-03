@@ -9,6 +9,8 @@ import (
 // MarketData represents aggregated market data for a card
 type MarketData struct {
 	CardID           primitive.ObjectID `bson:"card_id" json:"card_id"`
+	Source           string             `bson:"source,omitempty" json:"source,omitempty"`
+	Grade            string             `bson:"grade,omitempty" json:"grade,omitempty"`
 	Date             time.Time          `bson:"date" json:"date"`
 	OpenPrice        float64            `bson:"open_price" json:"open_price"`
 	ClosePrice       float64            `bson:"close_price" json:"close_price"`

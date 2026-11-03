@@ -18,6 +18,9 @@ type User struct {
 	UpdatedAt    time.Time          `bson:"updated_at" json:"updated_at"`
 	IsActive     bool               `bson:"is_active" json:"is_active"`
 	LastLoginAt  *time.Time         `bson:"last_login_at,omitempty" json:"last_login_at,omitempty"`
+	// Only the SHA-256 of the reset token is stored, never the token itself.
+	ResetTokenHash    string     `bson:"reset_token_hash,omitempty" json:"-"`
+	ResetTokenExpires *time.Time `bson:"reset_token_expires,omitempty" json:"-"`
 }
 
 // UserStats represents user statistics

@@ -17,6 +17,9 @@ import (
 // LoadSeries returns chronological daily average prices for a card over the last days.
 func LoadSeries(ctx context.Context, db *mongo.Database, cardID primitive.ObjectID, source string, days int) ([]DayPrice, error) {
 	match := bson.M{"card_id": cardID, "timestamp": bson.M{"$gte": time.Now().UTC().AddDate(0, 0, -days)}}
+	match["$or"] = bson.A{
+		bson.M{"grade": "raw"}, bson.M{"grade": ""}, bson.M{"grade": bson.M{"$exists": false}},
+	}
 	if source != "" && source != "all" {
 		match["source"] = source
 	}

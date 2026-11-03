@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"os"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -77,6 +78,17 @@ func main() {
 	pricesCollection := db.Collection("prices")
 	listingsCollection := db.Collection("listings")
 	featuredCollection := db.Collection("featured_content")
+
+	// The catalog ingester owns `cards` once it has run; refuse to wipe it.
+	catalogCount, err := cardsCollection.CountDocuments(ctx, bson.M{"catalog_source": bson.M{"$exists": true}})
+	if err != nil {
+		log.Printf("Warning: Failed to check for catalog-owned cards: %v", err)
+	}
+	if catalogCount > 0 && os.Getenv("SEED_FORCE") != "true" {
+		fmt.Printf("⏭️  Skipping sample seed: %d catalog-sourced cards already present.\n", catalogCount)
+		fmt.Println("   Use `make catalog-sync` to refresh the catalog, or SEED_FORCE=true to overwrite it.")
+		return
+	}
 
 	fmt.Println("🗑️  Clearing existing data...")
 	// Remove existing data

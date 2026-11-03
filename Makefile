@@ -4,7 +4,7 @@
 # Ensure we use Go 1.24.2 from /usr/local/go and Go tool binaries (air) are on PATH
 export PATH := /usr/local/go/bin:$(HOME)/go/bin:$(PATH)
 
-.PHONY: help install install-tools dev build preview clean setup seed test-backend test-frontend lint-frontend type-check start-prod dev-docker
+.PHONY: help install install-tools dev build preview clean setup seed catalog-sync catalog-demo prices scrape test-backend test-frontend lint-frontend type-check start-prod dev-docker
 
 # Default target - show help
 help:
@@ -15,6 +15,9 @@ help:
 	@echo "  make install-tools - Install dev tools (air live reload)"
 	@echo "  make setup       - Initial project setup with .env files"
 	@echo "  make seed        - Populate database with sample data"
+	@echo "  make catalog-sync - Import the TCGCSV product catalog"
+	@echo "  make prices      - Ingest live TCGplayer prices via TCGCSV"
+	@echo "  make scrape      - Scrape eBay sold listings for all cards"
 	@echo "  make full-setup  - Complete setup (install + setup + seed)"
 	@echo ""
 	@echo "🚀 Development Commands:"
@@ -72,9 +75,9 @@ dev: install-tools
 	@echo ""
 	@echo "Press Ctrl+C to stop all servers"
 	@echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-	@trap 'echo "\n🛑 Stopping servers..."; kill 0; docker-compose stop; exit 0' INT TERM; \
-	(cd backend && air -c .air.toml) & \
-	(cd frontend && npm run dev) & \
+	@trap 'trap - INT TERM; echo "\n🛑 Stopping servers..."; kill $$BACKEND_PID $$FRONTEND_PID 2>/dev/null; wait; docker-compose stop; exit 0' INT TERM; \
+	(cd backend && exec air -c .air.toml) & BACKEND_PID=$$!; \
+	(cd frontend && exec npm run dev) & FRONTEND_PID=$$!; \
 	wait
 
 # Build for production
@@ -165,6 +168,30 @@ seed:
 	@echo "  • Magic Alpha Starter Deck"
 	@echo ""
 	@echo "💡 Run 'make dev' to start the application!"
+
+scrape:
+	cd backend && go run ./cmd/scraper -all
+
+# Import the automated product catalog (all trading card categories by default).
+# Narrow a run with: make catalog-sync ARGS="--category 3 --limit 500 --dry-run"
+catalog-sync:
+	@echo "📚 Syncing product catalog..."
+	@cd backend && go run ./cmd/catalog $(ARGS)
+
+# Ingest live TCGplayer prices for every group we hold cards for.
+# Smoke test first with: make prices ARGS="-max-groups 3 -dry-run"
+# TCGCSV caps requests at 10k/24h and price files must not be re-fetched within
+# 24h, so run this at most once a day.
+prices:
+	@echo "💵 Ingesting live prices from TCGCSV..."
+	@cd backend && go run ./cmd/prices $(ARGS)
+
+# Smallest end-to-end demo: ingest one set, then scrape eBay sales for it.
+# TCGCSV group 3170 is Pokemon Silver Tempest (253 products).
+catalog-demo:
+	@$(MAKE) catalog-sync ARGS="--group 3170"
+	@echo "🛒 Scraping eBay sold listings for the new catalog entries..."
+	@cd backend && go run ./cmd/scraper -all
 
 # Complete setup workflow
 full-setup: setup seed
