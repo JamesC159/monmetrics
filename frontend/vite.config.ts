@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 
 // inotify does not fire for Windows-mounted paths under WSL, so fall back to polling there
-const usePolling = process.env.VITE_USE_POLLING === 'true' || __dirname.startsWith('/mnt/')
+const usePolling = process.env.VITE_USE_POLLING === 'true' || import.meta.dirname.startsWith('/mnt/')
 
 export default defineConfig({
   plugins: [react()],
@@ -17,13 +17,13 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
+      '@': path.resolve(import.meta.dirname, './src'),
     },
   },
   build: {
     rollupOptions: {
       input: {
-        main: path.resolve(__dirname, 'index.html'),
+        main: path.resolve(import.meta.dirname, 'index.html'),
       },
     },
   },

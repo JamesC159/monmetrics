@@ -116,7 +116,7 @@ export default function Dashboard() {
           />
         </div>
 
-        <div className='flex gap-1 mb-6 border-b border-white/10 overflow-x-auto' role='tablist'>
+        <div className='flex gap-1 mb-6 border-b border-white/10 overflow-x-auto overflow-y-hidden' role='tablist'>
           {TABS.map((t) => (
             <button
               key={t.id}
