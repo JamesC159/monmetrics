@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -71,6 +72,23 @@ func TestTCGCSVProductsAndPricesParsesRows(t *testing.T) {
 	}
 	if reverse.SubTypeName != "Reverse Holofoil" || reverse.MarketPrice != nil || reverse.DirectLowPrice == nil || *reverse.DirectLowPrice != 38.5 {
 		t.Errorf("an empty marketPrice must stay nil: %+v", reverse)
+	}
+}
+
+func TestParseProductsAndPricesWithoutPriceColumns(t *testing.T) {
+	// An unreleased set: TCGCSV drops every price column, subTypeName included.
+	const unpriced = `productId,name,cleanName,imageUrl,categoryId,groupId,url,modifiedOn,imageCount,extRarity,extNumber
+726604,Gem Blade Ruby,Gem Blade Ruby,https://example.test/726604.jpg,17,24919,https://cpt.tcgcsv.com/6GQ7,2026-10-28T13:55:59.187,1,Marvel Rare,CPB-001 MR
+`
+	products, prices, err := parseProductsAndPrices(strings.NewReader(unpriced))
+	if err != nil {
+		t.Fatalf("a group with no price columns should parse: %v", err)
+	}
+	if len(products) != 1 || products[0].extended("Number") != "CPB-001 MR" {
+		t.Errorf("unexpected products: %+v", products)
+	}
+	if len(prices) != 0 {
+		t.Errorf("expected no price rows, got %+v", prices)
 	}
 }
 

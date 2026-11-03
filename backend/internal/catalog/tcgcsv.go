@@ -92,7 +92,8 @@ const tcgplayerProductURL = "https://www.tcgplayer.com/product/%d"
 
 // parseProductsAndPrices reads ProductsAndPrices.csv: one row per product and printing,
 // with extendedData flattened into ext<Name> columns whose set varies by game. A product
-// with no prices yet has a single row with an empty subTypeName.
+// with no prices yet has a single row with an empty subTypeName, and a group with no
+// prices at all, such as an unreleased set, has no price columns.
 func parseProductsAndPrices(r io.Reader) ([]Product, []ProductPrice, error) {
 	reader := csv.NewReader(r)
 	header, err := reader.Read()
@@ -110,7 +111,7 @@ func parseProductsAndPrices(r io.Reader) ([]Product, []ProductPrice, error) {
 			extColumns = append(extColumns, name)
 		}
 	}
-	for _, name := range []string{"productId", "name", "subTypeName"} {
+	for _, name := range []string{"productId", "name"} {
 		if _, ok := column[name]; !ok {
 			return nil, nil, fmt.Errorf("missing %s column", name)
 		}
