@@ -94,6 +94,12 @@ func (r *Runner) RunOnce(ctx context.Context, opts SyncOptions) error {
 				continue
 			}
 			count, upserted, err := r.syncGroup(ctx, category, group, day)
+			if err != nil && opts.GroupID == 0 && errors.Is(err, ErrNotFound) {
+				// TCGCSV publishes no product file for an empty group. Checkpoint it as empty
+				// so a broad sync moves past it, and retries it after the resume window.
+				log.Printf("catalog sync %s / %s has no product file; recording it as empty", category.DisplayName, group.Name)
+				count, upserted, err = 0, 0, nil
+			}
 			if err != nil {
 				r.recordFailure(ctx, category, group, err, time.Now().UTC())
 				log.Printf("catalog sync stopped at %s / %s (resumes here next run): %v", category.DisplayName, group.Name, err)

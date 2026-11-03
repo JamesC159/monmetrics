@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -10,6 +11,7 @@ import (
 type stubSource struct {
 	groups      []Group
 	failOnGroup int
+	emptyGroup  int // answers like TCGCSV does for a group with no products
 	fetched     []int
 }
 
@@ -28,7 +30,26 @@ func (s *stubSource) Products(ctx context.Context, categoryID, groupID int) ([]P
 	if groupID == s.failOnGroup {
 		return nil, errors.New("source exploded")
 	}
+	if groupID == s.emptyGroup {
+		return nil, fmt.Errorf("%w: HTTP 404", ErrNotFound)
+	}
 	return []Product{{ProductID: groupID * 10, GroupID: groupID, CategoryID: categoryID, Name: "Card"}}, nil
+}
+
+func TestBroadSyncMovesPastEmptyGroups(t *testing.T) {
+	source := &stubSource{groups: []Group{{GroupID: 1}, {GroupID: 2}, {GroupID: 3}}, emptyGroup: 2}
+	runner := &Runner{Source: source, Interval: time.Hour, DryRun: true}
+
+	if err := runner.RunOnce(context.Background(), SyncOptions{}); err != nil {
+		t.Fatalf("a group with no product file should not stop a broad sync: %v", err)
+	}
+	if len(source.fetched) != 3 {
+		t.Errorf("expected every group to be fetched, got %v", source.fetched)
+	}
+
+	if err := runner.RunOnce(context.Background(), SyncOptions{GroupID: 2}); !errors.Is(err, ErrNotFound) {
+		t.Errorf("a targeted sync should report the missing product file, got %v", err)
+	}
 }
 
 func TestRunOnceStopsAtFailingGroup(t *testing.T) {

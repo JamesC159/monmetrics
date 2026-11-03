@@ -62,7 +62,7 @@ func TestRunnerHandlesMissingGroupFeed(t *testing.T) {
 		wantNext   bool
 	}{
 		{name: "broad sync skips missing feed", status: http.StatusNotFound, wantNext: true},
-		{name: "targeted sync reports missing feed", status: http.StatusNotFound, categoryID: 21, wantError: true},
+		{name: "targeted sync reports missing feed", status: http.StatusNotFound, categoryID: 99, wantError: true},
 		{name: "broad sync reports server errors", status: http.StatusInternalServerError, wantError: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -70,8 +70,8 @@ func TestRunnerHandlesMissingGroupFeed(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
 				case "/tcgplayer/categories":
-					w.Write([]byte(`{"success":true,"results":[{"categoryId":21,"displayName":"My Little Pony"},{"categoryId":3,"displayName":"Pokemon"}]}`))
-				case "/tcgplayer/21/groups":
+					w.Write([]byte(`{"success":true,"results":[{"categoryId":99,"displayName":"Retired Game"},{"categoryId":3,"displayName":"Pokemon"}]}`))
+				case "/tcgplayer/99/groups":
 					w.WriteHeader(test.status)
 				case "/tcgplayer/3/groups":
 					requestedNext = true
@@ -160,6 +160,12 @@ func TestIsTradingCardCategoryFiltersAccessories(t *testing.T) {
 		if got := IsTradingCardCategory(Category{DisplayName: name}); got != expected {
 			t.Errorf("IsTradingCardCategory(%q) = %v, want %v", name, got, expected)
 		}
+	}
+	if IsTradingCardCategory(Category{CategoryID: 69, DisplayName: "Marvel Comics"}) {
+		t.Error("TCGCSV's empty categories should not be catalogued")
+	}
+	if !IsTradingCardCategory(Category{CategoryID: 71, DisplayName: "Disney Lorcana"}) {
+		t.Error("Disney Lorcana should be catalogued")
 	}
 }
 

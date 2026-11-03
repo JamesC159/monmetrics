@@ -125,8 +125,15 @@ var nonTCGCategories = map[string]bool{
 
 var nonTCGKeywords = []string{"sleeve", "playmat", "deck box", "storage", "supplies", "miniature", "accessor"}
 
+// emptyCategories hold no products, and TCGCSV's FAQ asks clients to skip them. 69 and
+// 70 are abandoned comic-book categories with thousands of groups that all 404.
+var emptyCategories = map[int]bool{9: true, 10: true, 12: true, 14: true, 21: true, 55: true, 69: true, 70: true}
+
 // IsTradingCardCategory reports whether a category should be catalogued.
 func IsTradingCardCategory(c Category) bool {
+	if emptyCategories[c.CategoryID] {
+		return false
+	}
 	name := strings.ToLower(strings.TrimSpace(firstNonEmpty(c.DisplayName, c.Name)))
 	if name == "" || nonTCGCategories[name] {
 		return false
